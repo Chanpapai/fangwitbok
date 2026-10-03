@@ -11,6 +11,10 @@ app.set("trust proxy", 1); // อยู่หลัง proxy ของ Render/Ve
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
+// หน้าตั้งค่า Super Admin คนแรก: อยู่ก่อน CORS เพราะเปิดตรงจากโดเมน API เอง (ไม่ใช่จากหน้าเว็บ)
+// ยังปลอดภัย เพราะต้องมี SETUP_SECRET และใช้ได้ครั้งเดียวเมื่อยังไม่มี Super Admin
+app.use("/api/setup", generalLimiter, require("./routes/setup"));
+
 // CORS: อนุญาตเฉพาะโดเมนหน้าเว็บที่ตั้งค่าไว้ (ไม่ใช้ "*" เพราะต้องส่ง cookie ของ Admin ข้ามมาด้วย)
 const allowedOrigins = (process.env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
 app.use(
@@ -28,7 +32,6 @@ app.use(cookieParser());
 app.use(generalLimiter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
-app.use("/api/setup", require("./routes/setup"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/admin", require("./routes/admin")); // users, audit-logs
 app.use("/api/posts", require("./routes/posts"));
