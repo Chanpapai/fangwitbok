@@ -81,7 +81,7 @@ export default function SupportChat() {
       <button
         onClick={() => setOpen(true)} aria-label="ติดต่อแอดมิน"
         style={{ bottom: `calc(env(safe-area-inset-bottom) + ${pathname === "/" ? 100 : 72}px)` }}
-        className="fixed left-3 z-40 h-12 pl-1.5 pr-4 rounded-full bg-gradient-to-r from-brand-400 to-brand-500 text-white shadow-lg shadow-brand-500/40 ring-2 ring-white/70 dark:ring-white/20 flex items-center gap-2 active:scale-95 transition"
+        className="fixed right-3 z-40 h-12 pl-1.5 pr-4 rounded-full bg-gradient-to-r from-brand-400 to-brand-500 text-white shadow-lg shadow-brand-500/40 ring-2 ring-white/70 dark:ring-white/20 flex items-center gap-2 active:scale-95 transition"
       >
         <span className="relative w-9 h-9 rounded-full bg-white/25 flex items-center justify-center">
           <Icon name="headset" size={22} strokeWidth={2.1} />
@@ -91,7 +91,7 @@ export default function SupportChat() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-end sm:justify-start sm:p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-end sm:justify-end sm:p-4" onClick={() => setOpen(false)}>
           <div className="card !bg-white dark:!bg-ink-800 w-full sm:w-96 h-[78dvh] sm:h-[34rem] flex flex-col overflow-hidden animate-sheet rounded-b-none sm:rounded-b-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-white/10">
               <div>
