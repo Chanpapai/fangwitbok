@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
+body {
+  min-height: 100dvh;
+  background-image:
+    radial-gradient(60rem 36rem at 12% -10%, rgba(96, 165, 250, .16), transparent 60%),
+    radial-gradient(52rem 34rem at 100% 0%, rgba(109, 93, 246, .18), transparent 60%);
+  background-attachment: fixed;
+}
+:root:not(.dark) body {
+  background-image:
+    radial-gradient(60rem 36rem at 12% -10%, rgba(96, 165, 250, .18), transparent 60%),
+    radial-gradient(52rem 34rem at 100% 0%, rgba(109, 93, 246, .12), transparent 60%);
+}
+
+@layer components {
+  .card {
+    @apply bg-white/85 dark:bg-ink-800/80 backdrop-blur-md border border-slate-200/80 dark:border-white/[0.07] rounded-2xl shadow-sm;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full font-semibold px-4 py-2 text-sm transition active:scale-95 disabled:opacity-50 disabled:active:scale-100 select-none;
+  }
+  .btn-primary { @apply btn bg-gradient-to-r from-brand-400 to-brand-500 text-white shadow-lg shadow-brand-500/25 hover:brightness-110; }
+  .btn-ghost { @apply btn bg-slate-100 dark:bg-white/[0.07] text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/[0.12]; }
+  .btn-danger { @apply btn bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-500/20; }
+  .input {
+    @apply w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-ink-900/70 px-3.5 py-2.5 text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-brand-400/70 focus:border-transparent;
+  }
+  .badge { @apply inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full; }
+  .chip { @apply px-3.5 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition; }
+  .chip-on { @apply bg-gradient-to-r from-brand-400 to-brand-500 text-white shadow shadow-brand-500/25; }
+  .chip-off { @apply bg-slate-100 dark:bg-white/[0.07] text-slate-600 dark:text-slate-300; }
+}
+
+@keyframes popin { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
+.animate-popin { animation: popin .2s ease both; }
+@keyframes sheetup { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+.animate-sheet { animation: sheetup .22s ease both; }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.skeleton { background: linear-gradient(90deg, rgba(148,163,184,.12) 25%, rgba(148,163,184,.24) 50%, rgba(148,163,184,.12) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+
+/* โลโก้ลอยเป็นพื้นหลัง: ตกลงช้า ๆ โปร่งบาง ไม่รับ pointer จึงไม่บังปุ่ม/ข้อความ */
+@keyframes fwb-fall {
+  0%   { transform: translate3d(0, -25vh, 0) rotate(var(--r0)); }
+  50%  { transform: translate3d(var(--dx), 50vh, 0) rotate(calc((var(--r0) + var(--r1)) / 2)); }
+  100% { transform: translate3d(0, 125vh, 0) rotate(var(--r1)); }
+}
+.fwb-float { position: absolute; top: 0; will-change: transform; animation: fwb-fall var(--dur) linear var(--delay) infinite; }
+@keyframes fwb-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.animate-bob { animation: fwb-bob 5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .fwb-float, .animate-bob, .animate-popin, .animate-sheet { animation: none !important; }
+  .fwb-float { transform: translateY(var(--static-y, 40vh)); }
+}
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
