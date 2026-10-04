@@ -1,83 +1,65 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
-import Icon from "../../components/Icon";
-import ImageUploader from "./ImageUploader";
 
 export default function AdminRules() {
   const [blocks, setBlocks] = useState([]);
-  const [newText, setNewText] = useState("");
-  const [editing, setEditing] = useState({}); // id -> ข้อความที่กำลังแก้
-  const [error, setError] = useState("");
+  const [heading, setHeading] = useState("");
+  const [body, setBody] = useState("");
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   function load() { api.get("/api/rules").then((d) => setBlocks(d.blocks)); }
   useEffect(load, []);
 
-  const run = async (fn) => { setError(""); try { await fn(); load(); } catch (err) { setError(err.message); } };
+  async function add(e) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append("heading", heading);
+      form.append("body", body);
+      if (file) form.append("image", file);
+      await api.postForm("/api/admin/rules", form);
+      setHeading(""); setBody(""); setFile(null);
+      load();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-  const addText = () => run(async () => {
-    await api.post("/api/admin/rules", { type: "TEXT", text: newText });
-    setNewText("");
-  });
-  const addImage = ({ path }) => path && run(() => api.post("/api/admin/rules", { type: "IMAGE", imageUrl: path }));
-  const saveText = (b) => run(async () => {
-    await api.patch(`/api/admin/rules/${b.id}`, { text: editing[b.id] });
-    setEditing((e) => { const n = { ...e }; delete n[b.id]; return n; });
-  });
-  const replaceImage = (b, { path }) => path && run(() => api.patch(`/api/admin/rules/${b.id}`, { imageUrl: path }));
-  const remove = (b) => confirm("ลบบล็อกนี้ใช่ไหม?") && run(() => api.del(`/api/admin/rules/${b.id}`));
-  const move = (i, d) => {
-    const ids = blocks.map((b) => b.id);
-    const j = i + d;
-    if (j < 0 || j >= ids.length) return;
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    setBlocks(ids.map((id) => blocks.find((b) => b.id === id))); // อัปเดตหน้าจอทันที แล้วบันทึกลำดับ
-    run(() => api.post("/api/admin/rules/reorder", { ids }));
-  };
+  async function updateOrder(b, order) {
+    await api.patch(`/api/admin/rules/${b.id}`, { order });
+    load();
+  }
+  async function remove(id) {
+    if (!confirm("ลบรายการนี้ใช่ไหม?")) return;
+    await api.del(`/api/admin/rules/${id}`);
+    load();
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="card p-4 flex flex-col gap-2.5">
-        <p className="font-bold flex items-center gap-2"><Icon name="plus" size={17} /> เพิ่มเนื้อหากฎ</p>
-        <textarea className="input" rows={3} maxLength={3000} placeholder="พิมพ์ข้อความกฎ..." value={newText} onChange={(e) => setNewText(e.target.value)} />
-        <div className="flex flex-wrap gap-2 items-start">
-          <button disabled={!newText.trim()} onClick={addText} className="btn-primary text-sm"><Icon name="text" size={16} /> เพิ่มข้อความ</button>
-          <ImageUploader folder="rules" onChange={addImage} label="เพิ่มรูปภาพ" />
-        </div>
-        {error && <p className="text-sm text-red-500">{error}</p>}
-      </div>
+      <form onSubmit={add} className="card p-4 flex flex-col gap-2.5">
+        <p className="font-bold">เพิ่มเนื้อหากฎใหม่</p>
+        <input className="input" placeholder="หัวข้อ (ไม่บังคับ)" value={heading} onChange={(e) => setHeading(e.target.value)} />
+        <textarea className="input" rows={3} placeholder="เนื้อหา" value={body} onChange={(e) => setBody(e.target.value)} />
+        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files[0])} className="text-xs" />
+        <button disabled={busy} className="btn-primary">เพิ่ม</button>
+      </form>
 
-      <div className="flex flex-col gap-2">
-        {blocks.map((b, i) => (
-          <div key={b.id} className="card p-3 flex gap-3">
-            <div className="flex flex-col gap-1">
-              <button disabled={i === 0} onClick={() => move(i, -1)} className="btn-ghost !p-1.5" aria-label="เลื่อนขึ้น"><Icon name="up" size={15} /></button>
-              <button disabled={i === blocks.length - 1} onClick={() => move(i, 1)} className="btn-ghost !p-1.5" aria-label="เลื่อนลง"><Icon name="down" size={15} /></button>
-            </div>
-            <div className="flex-1 min-w-0">
-              {b.type === "TEXT" ? (
-                editing[b.id] !== undefined ? (
-                  <div className="flex flex-col gap-2">
-                    <textarea className="input" rows={4} maxLength={3000} value={editing[b.id]} onChange={(e) => setEditing({ ...editing, [b.id]: e.target.value })} />
-                    <div className="flex gap-2">
-                      <button onClick={() => saveText(b)} className="btn-primary text-xs">บันทึก</button>
-                      <button onClick={() => setEditing((e) => { const n = { ...e }; delete n[b.id]; return n; })} className="btn-ghost text-xs">ยกเลิก</button>
-                    </div>
-                  </div>
-                ) : <p className="text-sm whitespace-pre-line break-words">{b.text}</p>
-              ) : (
-                <ImageUploader folder="rules" value={b.imagePath} previewUrl={b.imageUrl} onChange={(r) => (r.path ? replaceImage(b, r) : null)} label="เปลี่ยนรูป" />
-              )}
-            </div>
-            <div className="flex flex-col gap-1.5 shrink-0">
-              {b.type === "TEXT" && editing[b.id] === undefined && (
-                <button onClick={() => setEditing({ ...editing, [b.id]: b.text || "" })} className="btn-ghost !p-2" aria-label="แก้ไข"><Icon name="edit" size={15} /></button>
-              )}
-              <button onClick={() => remove(b)} className="btn-danger !p-2" aria-label="ลบ"><Icon name="trash" size={15} /></button>
-            </div>
+      {blocks.map((b, i) => (
+        <div key={b.id} className="card p-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <input type="number" className="input !w-16 !py-1" value={b.order} onChange={(e) => updateOrder(b, +e.target.value)} />
+            <p className="font-semibold text-sm flex-1">{b.heading || "(ไม่มีหัวข้อ)"}</p>
+            <button onClick={() => remove(b.id)} className="btn-danger !py-1 !px-2 text-xs">ลบ</button>
           </div>
-        ))}
-        {blocks.length === 0 && <p className="text-sm text-slate-400 text-center py-4">ยังไม่มีเนื้อหากฎ</p>}
-      </div>
+          {b.imageUrl && <img src={b.imageUrl} className="rounded-lg max-h-32 object-contain mb-1.5" />}
+          <p className="text-xs text-slate-500 line-clamp-2">{b.body}</p>
+        </div>
+      ))}
     </div>
   );
 }

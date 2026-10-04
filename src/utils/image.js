@@ -1,40 +1,50 @@
 const crypto = require("crypto");
 const sharp = require("sharp");
-const { uploadObject, deleteObjects, storagePathOf } = require("../config/storage");
+const { supabaseAdmin } = require("../config/supabaseStorage");
 
-const MAX_DIMENSION = 1600; // ย่อรูปใหญ่ลง ประหยัด Storage (Free Tier 1GB) และกัน decompression bomb
-const FOLDERS = new Set(["posts", "popups", "rules", "site"]);
+const BUCKET = process.env.SUPABASE_BUCKET || "fangwitbok-uploads";
+const MAX_DIMENSION = 2000; // ย่อรูปใหญ่เกินไปลง กัน decompression-bomb และประหยัด storage ฟรี
 
 /**
- * แปลงรูปเป็น WebP แล้วเก็บใน Supabase Storage (ถาวร ไม่หายเมื่อ Deploy ใหม่)
- * - sharp ถอดรหัสรูปจริง: ไฟล์ปลอมนามสกุลจะ throw และล้าง EXIF/payload แปลกปลอม
- * - ชื่อไฟล์สุ่มเสมอ กัน path traversal
- * คืน [{ path, width, height }]
+ * แปลงไฟล์ที่อัปโหลดมา (buffer) ให้เป็น WebP เสมอ แล้วอัปโหลดขึ้น Supabase Storage
+ * (persistent — ไม่หายเมื่อ Render build/deploy ใหม่ ต่างจากเก็บไว้ในดิสก์ของเซิร์ฟเวอร์เดิม)
+ *
+ * - sharp "ถอดรหัสรูปจริง" ก่อนบันทึก = ยืนยันว่าเป็นไฟล์รูปจริง ไม่ใช่ไฟล์อันตรายสวมรอยนามสกุล
+ *   (ถอดไม่ได้ก็ throw แล้ว reject ไฟล์นั้นทันที)
+ * - บันทึกใหม่ทั้งหมด = ล้าง EXIF/metadata และ payload แปลกปลอมที่อาจแฝงมากับไฟล์ต้นฉบับ
+ * - ตั้งชื่อไฟล์สุ่มเสมอ (ไม่ใช้ชื่อ/นามสกุลจากผู้ใช้) กัน path traversal และไฟล์หลอกนามสกุลซ้อน
+ *
+ * @param {{buffer: Buffer}[]} files
+ * @param {string} folder เช่น "posts", "popups", "rules" (แยกโฟลเดอร์ในบักเก็ตเดียวกัน)
+ * @returns {Promise<{url:string, path:string}[]>}
  */
 async function processAndSaveImages(files, folder = "posts") {
-  if (!FOLDERS.has(folder)) throw new Error("invalid folder");
   const saved = [];
-  try {
-    for (const file of files) {
-      const { data, info } = await sharp(file.buffer, { limitInputPixels: 40_000_000 })
-        .rotate()
-        .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 80 })
-        .toBuffer({ resolveWithObject: true });
-      const objectPath = `${folder}/${Date.now()}-${crypto.randomBytes(8).toString("hex")}.webp`;
-      await uploadObject(objectPath, data, "image/webp");
-      saved.push({ path: objectPath, width: info.width, height: info.height });
-    }
-  } catch (err) {
-    await deleteObjects(saved.map((s) => s.path)); // ล้มกลางทาง = ลบที่อัปไปแล้วทิ้ง ไม่ให้เหลือไฟล์ค้าง
-    throw err;
+
+  for (const file of files) {
+    const filename = `${folder}/${Date.now()}-${crypto.randomBytes(8).toString("hex")}.webp`;
+
+    const buffer = await sharp(file.buffer)
+      .rotate() // ปรับตาม EXIF orientation ก่อนจะล้าง metadata ทิ้ง
+      .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+
+    const { error } = await supabaseAdmin.storage
+      .from(BUCKET)
+      .upload(filename, buffer, { contentType: "image/webp", upsert: false });
+    if (error) throw new Error(`อัปโหลดรูปไม่สำเร็จ: ${error.message}`);
+
+    const { data } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(filename);
+    saved.push({ url: data.publicUrl, path: filename });
   }
   return saved;
 }
 
-async function deleteImageFile(value) {
-  const p = storagePathOf(value);
-  if (p) await deleteObjects([p]);
+/** ลบไฟล์รูปออกจาก Supabase Storage จริง (เรียกตอนลบถาวร/purge trash) — ไม่ throw ถ้าหาไฟล์ไม่เจอ */
+async function deleteImageFile(storagePath) {
+  if (!storagePath) return;
+  await supabaseAdmin.storage.from(BUCKET).remove([storagePath]).catch(() => {});
 }
 
-module.exports = { processAndSaveImages, deleteImageFile };
+module.exports = { processAndSaveImages, deleteImageFile, BUCKET };
