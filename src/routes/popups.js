@@ -5,35 +5,27 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { validateBody } = require("../utils/validate");
 const { sanitizeText } = require("../utils/sanitize");
 const { logAudit } = require("../utils/audit");
-const { upload } = require("../middleware/upload");
-const { processAndSaveImages, deleteImageFile } = require("../utils/image");
+const { publicUrl } = require("../config/storage");
+const { deleteImageFile } = require("../utils/image");
 
 const router = express.Router();
-
-// POST /api/admin/popups/upload-image — อัปโหลดรูปขึ้น Supabase Storage ก่อน แล้วค่อยใช้ URL ที่ได้ไปสร้าง/แก้ popup
-router.post("/admin/popups/upload-image", requireAuth, requireRole("ADMIN"), upload.single("image"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "กรุณาแนบไฟล์รูป" });
-  try {
-    const [img] = await processAndSaveImages([req.file], "popups");
-    res.status(201).json(img); // { url, path }
-  } catch (e) {
-    res.status(400).json({ error: "ไฟล์รูปไม่ถูกต้อง" });
-  }
-});
+const staff = [requireAuth, requireRole("ADMIN")];
+const IMAGE_PATH = /^popups\/[0-9]+-[a-f0-9]{16}\.webp$/;
 
 const popupSchema = z.object({
   title: z.string().trim().min(1).max(100),
   body: z.string().trim().min(1).max(1000),
-  imageUrl: z.string().url().max(500).optional().or(z.literal("")),
-  imagePath: z.string().max(500).optional().or(z.literal("")),
+  imageUrl: z.string().regex(IMAGE_PATH).optional().nullable().or(z.literal("")),
   order: z.coerce.number().int().min(0).max(9999).default(0),
-  isActive: z.coerce.boolean().default(true),
-  startAt: z.coerce.date().optional(),
-  endAt: z.coerce.date().optional(),
+  isActive: z.boolean().default(true),
+  startAt: z.coerce.date().optional().nullable(),
+  endAt: z.coerce.date().optional().nullable(),
 });
 
-// GET /api/popups — สาธารณะ: เฉพาะ popup ที่ isActive และอยู่ในช่วงเวลาที่กำหนด เรียงตาม order
-router.get("/", async (req, res) => {
+const serialize = (p) => ({ ...p, imagePath: p.imageUrl, imageUrl: publicUrl(p.imageUrl) });
+
+// GET /api/popups — สาธารณะ: เฉพาะ popup ที่เปิดอยู่และอยู่ในช่วงเวลา (cache สั้น ๆ ลด query)
+router.get("/popups", async (_req, res) => {
   const now = new Date();
   const popups = await prisma.popup.findMany({
     where: {
@@ -44,68 +36,59 @@ router.get("/", async (req, res) => {
       ],
     },
     orderBy: { order: "asc" },
+    take: 20,
     select: { id: true, title: true, body: true, imageUrl: true, order: true },
   });
-  res.json({ popups });
+  res.set("Cache-Control", "public, max-age=30");
+  res.json({ popups: popups.map((p) => ({ ...p, imageUrl: publicUrl(p.imageUrl) })) });
 });
 
-// GET /api/admin/popups — Admin ดูทั้งหมด (รวมที่ปิดอยู่)
-router.get("/admin/popups", requireAuth, requireRole("ADMIN"), async (_req, res) => {
+router.get("/admin/popups", ...staff, async (_req, res) => {
   const popups = await prisma.popup.findMany({ orderBy: { order: "asc" } });
-  res.json({ popups });
+  res.json({ popups: popups.map(serialize) });
 });
 
-// POST /api/admin/popups — สร้าง popup ใหม่ (สร้างได้หลายรายการพร้อมกัน กำหนดลำดับ/สถานะเอง)
-router.post("/admin/popups", requireAuth, requireRole("ADMIN"), validateBody(popupSchema), async (req, res) => {
-  const data = req.body;
+router.post("/admin/popups", ...staff, validateBody(popupSchema), async (req, res) => {
+  const d = req.body;
   const popup = await prisma.popup.create({
     data: {
-      title: sanitizeText(data.title),
-      body: sanitizeText(data.body),
-      imageUrl: data.imageUrl || null,
-      imagePath: data.imagePath || null,
-      order: data.order,
-      isActive: data.isActive,
-      startAt: data.startAt || null,
-      endAt: data.endAt || null,
-      createdById: req.user.id,
+      title: sanitizeText(d.title), body: sanitizeText(d.body), imageUrl: d.imageUrl || null,
+      order: d.order, isActive: d.isActive, startAt: d.startAt || null, endAt: d.endAt || null, createdById: req.user.id,
     },
   });
   await logAudit({ actorId: req.user.id, action: "POPUP_CREATE", targetType: "POPUP", targetId: popup.id, ipAddress: req.ip });
-  res.status(201).json({ popup });
+  res.status(201).json({ popup: serialize(popup) });
 });
 
-// PATCH /api/admin/popups/:id
-router.patch("/admin/popups/:id", requireAuth, requireRole("ADMIN"), validateBody(popupSchema.partial()), async (req, res) => {
+router.patch("/admin/popups/:id", ...staff, validateBody(popupSchema.partial()), async (req, res) => {
   const existing = await prisma.popup.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "ไม่พบ Popup นี้" });
-
-  const data = req.body;
+  const d = req.body;
   const popup = await prisma.popup.update({
-    where: { id: req.params.id },
+    where: { id: existing.id },
     data: {
-      ...(data.title !== undefined && { title: sanitizeText(data.title) }),
-      ...(data.body !== undefined && { body: sanitizeText(data.body) }),
-      ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl || null }),
-      ...(data.imagePath !== undefined && { imagePath: data.imagePath || null }),
-      ...(data.order !== undefined && { order: data.order }),
-      ...(data.isActive !== undefined && { isActive: data.isActive }),
-      ...(data.startAt !== undefined && { startAt: data.startAt || null }),
-      ...(data.endAt !== undefined && { endAt: data.endAt || null }),
+      ...(d.title !== undefined && { title: sanitizeText(d.title) }),
+      ...(d.body !== undefined && { body: sanitizeText(d.body) }),
+      ...(d.imageUrl !== undefined && { imageUrl: d.imageUrl || null }),
+      ...(d.order !== undefined && { order: d.order }),
+      ...(d.isActive !== undefined && { isActive: d.isActive }),
+      ...(d.startAt !== undefined && { startAt: d.startAt || null }),
+      ...(d.endAt !== undefined && { endAt: d.endAt || null }),
     },
   });
+  if (d.imageUrl !== undefined && existing.imageUrl && existing.imageUrl !== (d.imageUrl || null)) {
+    await deleteImageFile(existing.imageUrl);
+  }
   await logAudit({ actorId: req.user.id, action: "POPUP_UPDATE", targetType: "POPUP", targetId: popup.id, ipAddress: req.ip });
-  res.json({ popup });
+  res.json({ popup: serialize(popup) });
 });
 
-// DELETE /api/admin/popups/:id
-router.delete("/admin/popups/:id", requireAuth, requireRole("ADMIN"), async (req, res) => {
+router.delete("/admin/popups/:id", ...staff, async (req, res) => {
   const existing = await prisma.popup.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "ไม่พบ Popup นี้" });
-  if (existing.imagePath) await deleteImageFile(existing.imagePath);
-
-  await prisma.popup.delete({ where: { id: req.params.id } });
-  await logAudit({ actorId: req.user.id, action: "POPUP_DELETE", targetType: "POPUP", targetId: req.params.id, ipAddress: req.ip });
+  await prisma.popup.delete({ where: { id: existing.id } });
+  await deleteImageFile(existing.imageUrl);
+  await logAudit({ actorId: req.user.id, action: "POPUP_DELETE", targetType: "POPUP", targetId: existing.id, ipAddress: req.ip });
   res.json({ ok: true });
 });
 

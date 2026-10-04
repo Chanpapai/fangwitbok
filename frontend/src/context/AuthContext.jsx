@@ -1,49 +1,41 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { api, setAccessToken, bootstrapSession } from "../lib/api";
+import { getStaffFlag, setStaffFlag } from "../lib/guest";
 
 const AuthContext = createContext(null);
 
+// ผู้เข้าชมทั่วไปไม่มีบัญชี: กู้เซสชันก็ต่อเมื่อเครื่องนี้เคย Login เป็นทีมงานเท่านั้น
+// (ไม่ยิง /auth/refresh ทุกครั้งที่เปิดเว็บ ประหยัด Request และไม่ปลุก Server โดยไม่จำเป็น)
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(getStaffFlag());
 
   useEffect(() => {
-    (async () => {
-      const result = await bootstrapSession();
+    if (!getStaffFlag()) return;
+    bootstrapSession().then((result) => {
       if (result?.user) setUser(result.user);
+      else setStaffFlag(false);
       setLoading(false);
-    })();
+    });
   }, []);
 
   const login = useCallback(async (studentCode, password) => {
     const data = await api.post("/api/auth/login", { studentCode, password });
     setAccessToken(data.accessToken);
     setUser(data.user);
-    return data.user;
-  }, []);
-
-  const register = useCallback(async (studentCode, password, displayName) => {
-    const data = await api.post("/api/auth/register", { studentCode, password, displayName });
-    setAccessToken(data.accessToken);
-    setUser(data.user);
+    setStaffFlag(true);
     return data.user;
   }, []);
 
   const logout = useCallback(async () => {
-    try {
-      await api.post("/api/auth/logout");
-    } catch {
-      /* ไม่เป็นไรถึงแม้ call ไม่สำเร็จ ก็ล้างฝั่ง client ต่อ */
-    }
+    try { await api.post("/api/auth/logout"); } catch { /* ล้างฝั่งเครื่องต่อได้ */ }
     setAccessToken(null);
     setUser(null);
+    setStaffFlag(false);
   }, []);
 
-  return (
-    <AuthContext.Provider value={{ user, setUser, loading, login, register, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const isStaff = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
+  return <AuthContext.Provider value={{ user, isStaff, loading, login, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

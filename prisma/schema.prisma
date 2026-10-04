@@ -1,8 +1,6 @@
 // ============================================================
 // FangwitBok V2 — Database Schema (PostgreSQL + Prisma)
-// V3: เปิดให้โพสต์/คอมเมนต์/กดใจ/รายงานได้โดยไม่ต้องมีบัญชี (ระบุตัวตน/ไม่ระบุตัวตน
-// ด้วย ownerToken แทนการล็อกอิน) + ระบบแจ้งปัญหา (SupportTicket) + กฎการฝากบอก (RuleBlock)
-// บัญชีผู้ใช้ (User) ตอนนี้ใช้สำหรับ Admin/Super Admin เท่านั้น
+// Phase 1: โครงสร้างข้อมูล + RBAC ทั้งระบบ
 // ============================================================
 
 generator client {
@@ -11,9 +9,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
+// ---------- สิทธิ์ผู้ใช้: Super Admin > Admin > User ----------
 enum Role {
   SUPER_ADMIN
   ADMIN
@@ -25,9 +25,19 @@ enum PostType {
   LOST_FOUND // ตามหาของหาย
 }
 
-enum LostStatus {
-  NOT_FOUND // ยังไม่เจอ
-  FOUND // เจอของแล้ว
+enum RuleBlockType {
+  TEXT
+  IMAGE
+}
+
+enum SupportSender {
+  VISITOR
+  ADMIN
+}
+
+enum SupportStatus {
+  OPEN
+  CLOSED
 }
 
 enum TargetType {
@@ -44,52 +54,41 @@ enum ReportStatus {
 enum NotificationType {
   NEW_POST
   NEW_REPORT
-  POST_RESOLVED
-  NEW_SUPPORT_TICKET
   SYSTEM
-}
-
-enum TicketStatus {
-  OPEN
-  CLOSED
-}
-
-enum MessageSender {
-  VISITOR
-  ADMIN
+  SUPPORT_MESSAGE
 }
 
 // ============================================================
-// ผู้ใช้ — ปัจจุบันมีไว้สำหรับ Admin/Super Admin เท่านั้น (ผู้เยี่ยมชมทั่วไปไม่ต้องสมัคร)
+// ผู้ใช้
 // ============================================================
 model User {
   id           String   @id @default(uuid())
-  studentCode  String   @unique
+  studentCode  String   @unique // รหัสนักเรียน/อีเมลโรงเรียน — ใช้ล็อกอิน
   passwordHash String
   displayName  String
   avatarUrl    String?
-  role         Role     @default(USER) // บัญชีสมัครเองเริ่มที่สิทธิ์ต่ำสุดเสมอ (ยกระดับได้เฉพาะ Super Admin)
+  role         Role     @default(USER)
   isBanned     Boolean  @default(false)
   bannedReason String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  posts          Post[]
-  comments       Comment[]
-  likes          Like[]
-  reportsHandled Report[]        @relation("ReportsHandled")
-  auditLogs      AuditLog[]
-  notifications  Notification[]
-  refreshTokens  RefreshToken[]
-  popupsCreated  Popup[]
-  ruleBlocks     RuleBlock[]
-  supportReplies SupportMessage[]
-  roleChangesBy  RoleChangeLog[] @relation("RoleChangedBy")
-  roleChangesOn  RoleChangeLog[] @relation("RoleChangedOn")
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  reportsFiled  Report[]      @relation("ReportsFiled")
+  reportsHandled Report[]     @relation("ReportsHandled")
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  refreshTokens RefreshToken[]
+  popupsCreated Popup[]
+  roleChangesBy RoleChangeLog[] @relation("RoleChangedBy")
+  roleChangesOn RoleChangeLog[] @relation("RoleChangedOn")
 
   @@index([role])
 }
 
+// ล็อกอินด้วย refresh token (เก็บเป็น hash เท่านั้น รองรับ revoke รายอุปกรณ์)
 model RefreshToken {
   id        String    @id @default(uuid())
   userId    String
@@ -104,27 +103,23 @@ model RefreshToken {
 }
 
 // ============================================================
-// โพสต์: ฝากบอก / ตามหาของหาย — โพสต์ได้โดยไม่ต้องมีบัญชี
+// โพสต์: ฝากบอก / ตามหาของหาย
 // ============================================================
 model Post {
-  id          String      @id @default(uuid())
+  id          String     @id @default(uuid())
   type        PostType
-  isAnonymous Boolean     @default(false) // true = "ไม่ระบุตัวตน" ไม่เก็บ/ไม่แสดงชื่อเลย
+  // ผู้โพสต์ทั่วไป (Guest) ไม่ต้องมีบัญชี => authorId เป็น null ได้ (โพสต์เก่าที่ผูกบัญชียังอยู่ครบ)
+  authorId    String?
+  author      User?      @relation(fields: [authorId], references: [id])
+  isAnonymous Boolean    @default(false) // true = ไม่เก็บชื่อ/ชั้นเลย
+  authorName  String? // ชื่อที่ผู้โพสต์กรอกเอง (เฉพาะโหมดระบุตัวตน)
+  authorClass String? // ชั้น/ห้อง (เฉพาะโหมดระบุตัวตน)
+  ownerTokenHash String? // เลิกใช้แล้ว (ผู้โพสต์ลบเองไม่ได้) เก็บคอลัมน์ไว้เพื่อไม่ให้ข้อมูลเดิมหาย
+  ipHash      String? // hash ของ IP ให้ Admin ตรวจสแปม ไม่เปิดเผยสู่สาธารณะ
   content     String
-  lostStatus  LostStatus?
-  location    String?
+  location    String? // จุดที่พบ/ทำหาย (สำหรับตามหาของหาย)
 
-  // ---------- ผู้โพสต์ ----------
-  // ถ้าเลือก "ระบุตัวตน" (ไม่มีบัญชี): เก็บชื่อ/ชั้นห้องที่พิมพ์เองไว้ตรงนี้
-  guestName      String?
-  guestClassroom String?
-  // ถ้าล็อกอินเป็น Admin ตอนโพสต์ (ไม่บังคับ): ผูกกับบัญชีจริง
-  authorId       String?
-  author         User?   @relation(fields: [authorId], references: [id])
-  // พิสูจน์ความเป็นเจ้าของโพสต์แบบไม่มีบัญชี: เก็บ "hash" ของโทเคนสุ่มที่ส่งกลับให้ผู้โพสต์
-  // ครั้งเดียวตอนสร้างโพสต์ (เหมือนรหัสผ่าน ไม่เก็บค่าจริง) ใช้ยืนยันตอนเปลี่ยนสถานะ/ลบโพสต์ภายหลัง
-  ownerTokenHash String? @unique
-
+  // Soft delete / Trash: ลบแล้วย้ายมาที่นี่ก่อน ลบถาวรอัตโนมัติเมื่อเกิน 15 วัน
   deletedAt   DateTime?
   deletedById String?
 
@@ -137,15 +132,16 @@ model Post {
   reports  Report[]
 
   @@index([type, deletedAt])
-  @@index([deletedAt])
+  @@index([deletedAt]) // ใช้สำหรับ job ลบถาวรอัตโนมัติ (deletedAt < now-15d)
 }
 
 model PostImage {
   id       String @id @default(uuid())
   postId   String
   post     Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  url      String // URL สาธารณะจาก Supabase Storage (คงอยู่ถาวร ไม่หายเมื่อ deploy ใหม่)
-  path     String // ตำแหน่งไฟล์จริงใน bucket (ใช้ตอนลบไฟล์)
+  url      String // path ใน Supabase Storage (หรือ URL เต็มของรูปเก่า)
+  width    Int?
+  height   Int?
   position Int    @default(0)
 
   @@index([postId])
@@ -155,14 +151,14 @@ model Comment {
   id          String    @id @default(uuid())
   postId      String
   post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId    String?
+  author      User?     @relation(fields: [authorId], references: [id])
   isAnonymous Boolean   @default(false)
+  authorName  String?
+  authorClass String?
+  ownerTokenHash String?
+  ipHash      String?
   content     String
-
-  guestName      String?
-  authorId       String?
-  author         User?   @relation(fields: [authorId], references: [id])
-  ownerTokenHash String? @unique
-
   deletedAt   DateTime?
   deletedById String?
   createdAt   DateTime  @default(now())
@@ -176,18 +172,17 @@ model Like {
   id        String   @id @default(uuid())
   postId    String
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  // รองรับทั้งผู้เยี่ยมชม (ไม่มีบัญชี) และผู้ใช้ที่ล็อกอิน ด้วยคีย์เดียวกัน กันกดใจซ้ำ:
-  // ผู้เยี่ยมชม -> "visitor:<สุ่มจาก localStorage>"   ผู้ใช้ล็อกอิน -> "user:<userId>"
-  voterKey  String
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  voterKey  String? // sha256 ของรหัสอุปกรณ์ผู้เข้าชม (ไม่ต้อง Login)
   createdAt DateTime @default(now())
 
-  @@unique([postId, voterKey])
+  @@unique([postId, userId])
+  @@unique([postId, voterKey]) // กดใจซ้ำจากอุปกรณ์เดิมไม่ได้
 }
 
 // ============================================================
-// รายงาน (Report/Moderation) — รายงานได้โดยไม่ต้องมีบัญชี
+// รายงาน (Report/Moderation)
 // ============================================================
 model Report {
   id         String       @id @default(uuid())
@@ -197,9 +192,11 @@ model Report {
   commentId  String?
   comment    Comment?     @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
-  reporterLabel String? // บันทึกไว้แค่เพื่อ debug/สถิติ ไม่ใช่ข้อมูลระบุตัวตนจริง เช่น "ผู้เยี่ยมชม"
-  reason         String
-  status         ReportStatus @default(PENDING)
+  reporterId String?
+  reporter   User?        @relation("ReportsFiled", fields: [reporterId], references: [id])
+  reporterHash String?
+  reason     String
+  status     ReportStatus @default(PENDING)
 
   reviewedById String?
   reviewedBy   User?     @relation("ReportsHandled", fields: [reviewedById], references: [id])
@@ -211,16 +208,17 @@ model Report {
 }
 
 // ============================================================
-// Audit Log — append-only
+// Audit Log — บันทึกทุกการกระทำสำคัญของ Admin/Super Admin
+// (ใครทำอะไร เมื่อไร กับข้อมูลอะไร) ห้ามแก้ไข/ลบภายหลัง (append-only)
 // ============================================================
 model AuditLog {
   id         String   @id @default(uuid())
-  actorId    String
-  actor      User     @relation(fields: [actorId], references: [id])
-  action     String
-  targetType String
+  actorId    String? // null = ระบบทำเอง (เช่น ลบถาวรอัตโนมัติ)
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String // เช่น "POST_DELETE", "POST_RESTORE", "REPORT_RESOLVE", "ROLE_CHANGE"
+  targetType String // "POST" | "COMMENT" | "USER" | "REPORT" | "POPUP"
   targetId   String
-  metadata   Json?
+  metadata   Json? // รายละเอียดเพิ่มเติม (ค่าก่อน/หลัง ฯลฯ)
   ipAddress  String?
   createdAt  DateTime @default(now())
 
@@ -229,26 +227,26 @@ model AuditLog {
   @@index([createdAt])
 }
 
+// บันทึกแยกเฉพาะการเปลี่ยนสิทธิ์ผู้ใช้ (ตรวจสอบย้อนหลังง่าย + ป้องกันการเลื่อนสิทธิ์ตัวเอง)
 model RoleChangeLog {
-  id           String   @id @default(uuid())
+  id          String   @id @default(uuid())
   targetUserId String
-  targetUser   User     @relation("RoleChangedOn", fields: [targetUserId], references: [id])
-  fromRole     Role
-  toRole       Role
-  changedById  String
-  changedBy    User     @relation("RoleChangedBy", fields: [changedById], references: [id])
-  createdAt    DateTime @default(now())
+  targetUser   User    @relation("RoleChangedOn", fields: [targetUserId], references: [id])
+  fromRole    Role
+  toRole      Role
+  changedById String
+  changedBy   User     @relation("RoleChangedBy", fields: [changedById], references: [id])
+  createdAt   DateTime @default(now())
 }
 
 // ============================================================
-// Popup ประกาศ
+// Popup ประกาศ (Admin สร้างได้หลายรายการ กำหนดลำดับ/ช่วงเวลาแสดงผล)
 // ============================================================
 model Popup {
   id          String    @id @default(uuid())
   title       String
   body        String
   imageUrl    String?
-  imagePath   String?
   order       Int       @default(0)
   isActive    Boolean   @default(true)
   startAt     DateTime?
@@ -261,66 +259,78 @@ model Popup {
 }
 
 // ============================================================
-// กฎการฝากบอก — Admin จัดเรียง/แก้ข้อความ/แนบรูปได้หลายบล็อก
+// การแจ้งเตือน (สำหรับ Admin: โพสต์ใหม่ / รายงานใหม่ / เหตุการณ์สำคัญ)
 // ============================================================
-model RuleBlock {
-  id          String   @id @default(uuid())
-  order       Int      @default(0)
-  heading     String?
-  body        String?
-  imageUrl    String?
-  imagePath   String?
-  createdById String?
-  createdBy   User?    @relation(fields: [createdById], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Notification {
+  id            String            @id @default(uuid())
+  recipientId   String? // null = แจ้งเตือนกว้างถึง Admin ทุกคน (ดูจาก role ตอน query)
+  recipient     User?             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  type          NotificationType
+  title         String
+  body          String
+  relatedType   String?
+  relatedId     String?
+  isRead        Boolean           @default(false)
+  createdAt     DateTime          @default(now())
 
-  @@index([order])
+  @@index([recipientId, isRead])
 }
 
 // ============================================================
-// แจ้งปัญหา (Support Chat) — ผู้เยี่ยมชมคุยกับแอดมินโดยไม่ต้องมีบัญชี
-// ยืนยันตัวตนเจ้าของ ticket ด้วย visitorTokenHash เหมือนกลไกของโพสต์/คอมเมนต์
+// กฎการฝากบอก: บล็อกข้อความ/รูปภาพ เรียงลำดับโดย Admin
 // ============================================================
-model SupportTicket {
-  id               String       @id @default(uuid())
-  visitorTokenHash String       @unique
-  status           TicketStatus @default(OPEN)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+model RuleBlock {
+  id        String        @id @default(uuid())
+  type      RuleBlockType
+  text      String?
+  imageUrl  String? // path ใน Supabase Storage
+  position  Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([position])
+}
+
+// ============================================================
+// แชท "แจ้งปัญหา" ผู้เข้าชม (ไม่ต้อง Login) <-> Admin
+// ผู้เข้าชมถือ threadToken (DB เก็บแค่ hash) เพื่อเปิดดูห้องแชทของตัวเองเท่านั้น
+// ============================================================
+model SupportThread {
+  id               String        @id @default(uuid())
+  tokenHash        String        @unique
+  contact          String?
+  status           SupportStatus @default(OPEN)
+  ipHash           String?
+  unreadForAdmin   Int           @default(0)
+  unreadForVisitor Int           @default(0)
+  lastMessageAt    DateTime      @default(now())
+  createdAt        DateTime      @default(now())
 
   messages SupportMessage[]
 
-  @@index([status])
+  @@index([status, lastMessageAt])
 }
 
 model SupportMessage {
-  id             String        @id @default(uuid())
-  ticketId       String
-  ticket         SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  sender         MessageSender
-  senderAdminId  String?
-  senderAdmin    User?         @relation(fields: [senderAdminId], references: [id])
-  content        String
-  createdAt      DateTime      @default(now())
+  id        String        @id @default(uuid())
+  threadId  String
+  thread    SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender    SupportSender
+  adminName String?
+  body      String
+  createdAt DateTime      @default(now())
 
-  @@index([ticketId])
+  @@index([threadId, createdAt])
 }
 
 // ============================================================
-// การแจ้งเตือน (Admin)
+// ตั้งค่าหน้าเว็บไซต์ (Super Admin แก้ได้จากหลังบ้าน ไม่ต้องแก้โค้ด)
+// key: homeHeadline | postConfirmMessage | logoPath | profilePath
+// รูปเก็บใน Supabase Storage (ถาวร) ที่นี่เก็บแค่ path
 // ============================================================
-model Notification {
-  id          String           @id @default(uuid())
-  recipientId String?
-  recipient   User?            @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  type        NotificationType
-  title       String
-  body        String
-  relatedType String?
-  relatedId   String?
-  isRead      Boolean          @default(false)
-  createdAt   DateTime         @default(now())
-
-  @@index([recipientId, isRead])
+model SiteSetting {
+  key         String   @id
+  value       String
+  updatedById String?
+  updatedAt   DateTime @updatedAt
 }

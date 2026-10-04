@@ -42,12 +42,12 @@ router.get("/", async (req, res) => {
 
   const existing = await prisma.user.count({ where: { role: "SUPER_ADMIN" } });
   if (existing > 0) {
-    return res.send(page("<h1>✅ ตั้งค่าเสร็จเรียบร้อยแล้ว</h1><p>มี Super Admin อยู่ในระบบแล้ว หน้านี้ใช้งานได้ครั้งเดียวเท่านั้นเพื่อความปลอดภัย</p>"));
+    return res.send(page("<h1>ตั้งค่าเสร็จเรียบร้อยแล้ว</h1><p>มี Super Admin อยู่ในระบบแล้ว หน้านี้ใช้งานได้ครั้งเดียวเท่านั้นเพื่อความปลอดภัย</p>"));
   }
 
   res.send(
     page(`
-      <h1>🛠️ สร้างบัญชี Super Admin คนแรก</h1>
+      <h1>สร้างบัญชี Super Admin คนแรก</h1>
       <form method="POST" action="/api/setup?token=${encodeURIComponent(req.query.token)}">
         <input name="studentCode" placeholder="รหัสนักเรียน/รหัสแอดมิน เช่น admin001" required minlength="4" maxlength="20" />
         <input name="displayName" placeholder="ชื่อที่แสดง" required maxlength="50" />
@@ -90,9 +90,9 @@ router.post("/", express.urlencoded({ extended: false }), async (req, res) => {
 
   res.send(
     page(`
-      <h1>✅ สร้างบัญชีสำเร็จ!</h1>
+      <h1>สร้างบัญชีสำเร็จ!</h1>
       <p>รหัสนักเรียน: <b>${studentCode}</b><br/>ใช้รหัสผ่านที่เพิ่งตั้งเข้าสู่ระบบที่หน้าเว็บ FangwitBok ของคุณได้เลย</p>
-      <p>⚠️ หน้านี้ใช้งานไม่ได้อีกแล้ว แนะนำให้ลบค่า SETUP_SECRET ออกจากการตั้งค่าเซิร์ฟเวอร์เพื่อความปลอดภัย</p>
+      <p>หน้านี้ใช้งานไม่ได้อีกแล้ว แนะนำให้ลบค่า SETUP_SECRET ออกจากการตั้งค่าเซิร์ฟเวอร์เพื่อความปลอดภัย</p>
     `)
   );
 });

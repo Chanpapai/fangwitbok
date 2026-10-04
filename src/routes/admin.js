@@ -4,6 +4,7 @@ const prisma = require("../config/db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { validateBody } = require("../utils/validate");
 const { logAudit } = require("../utils/audit");
+const { hashPassword } = require("../utils/password");
 
 const router = express.Router();
 
@@ -23,6 +24,22 @@ router.get("/users", requireRole("ADMIN"), async (req, res) => {
     take: pageSize,
   });
   res.json({ users, page });
+});
+
+const createAdminSchema = z.object({
+  studentCode: z.string().trim().min(4).max(20).regex(/^[a-zA-Z0-9._-]+$/, "รหัสมีอักขระไม่ถูกต้อง"),
+  password: z.string().min(8).max(72).regex(/[0-9]/, "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว"),
+  displayName: z.string().trim().min(1).max(50),
+  role: z.enum(["ADMIN", "SUPER_ADMIN"]).default("ADMIN"),
+});
+
+// POST /api/admin/users — Super Admin สร้างบัญชีทีมผู้ดูแล (ผู้เข้าชมทั่วไปไม่มีบัญชี)
+router.post("/users", requireRole("SUPER_ADMIN"), validateBody(createAdminSchema), async (req, res) => {
+  const { studentCode, password, displayName, role } = req.body;
+  if (await prisma.user.findUnique({ where: { studentCode } })) return res.status(409).json({ error: "รหัสนี้ถูกใช้แล้ว" });
+  const user = await prisma.user.create({ data: { studentCode, displayName, role, passwordHash: await hashPassword(password) } });
+  await logAudit({ actorId: req.user.id, action: "ADMIN_CREATE", targetType: "USER", targetId: user.id, metadata: { role }, ipAddress: req.ip });
+  res.status(201).json({ user: { id: user.id, studentCode: user.studentCode, displayName: user.displayName, role: user.role } });
 });
 
 const roleChangeSchema = z.object({ role: z.enum(["USER", "ADMIN", "SUPER_ADMIN"]) });

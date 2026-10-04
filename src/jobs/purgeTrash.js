@@ -14,11 +14,11 @@ async function purgeExpiredTrash() {
   });
 
   for (const post of expiredPosts) {
-    await Promise.all(post.images.map((img) => deleteImageFile(img.path)));
+    await Promise.all(post.images.map((img) => deleteImageFile(img.url)));
     await prisma.post.delete({ where: { id: post.id } });
     // ระบบเป็นผู้ลบเอง (ไม่ใช่ Admin คนใดคนหนึ่ง) บันทึกไว้ด้วย actorId ของผู้ที่สั่งลบครั้งแรก ถ้ามี
     await logAudit({
-      actorId: post.deletedById || post.authorId,
+      actorId: post.deletedById || null,
       action: "POST_AUTO_PURGE",
       targetType: "POST",
       targetId: post.id,
@@ -30,13 +30,19 @@ async function purgeExpiredTrash() {
   for (const comment of expiredComments) {
     await prisma.comment.delete({ where: { id: comment.id } });
     await logAudit({
-      actorId: comment.deletedById || comment.authorId,
+      actorId: comment.deletedById || null,
       action: "COMMENT_AUTO_PURGE",
       targetType: "COMMENT",
       targetId: comment.id,
       metadata: { reason: `เกิน ${RETENTION_DAYS} วันใน Trash` },
     }).catch(() => {});
   }
+
+  // ห้องแชทแจ้งปัญหาที่ปิดแล้วเกิน 30 วัน ลบทิ้ง ประหยัดพื้นที่ DB (Free Tier 500MB)
+  const oldThreads = await prisma.supportThread.deleteMany({
+    where: { status: "CLOSED", lastMessageAt: { lt: new Date(Date.now() - 30 * 86400000) } },
+  });
+  if (oldThreads.count) console.log(`[purgeTrash] ลบแชทที่ปิดแล้วเกิน 30 วัน ${oldThreads.count} ห้อง`);
 
   if (expiredPosts.length || expiredComments.length) {
     console.log(

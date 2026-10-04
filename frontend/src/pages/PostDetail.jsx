@@ -1,43 +1,49 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
-import { getOwnerToken, saveOwnerToken } from "../lib/identity";
-import PostCard from "../components/PostCard";
-import { TrashIcon } from "../components/Icons";
-
-function timeAgo(iso) {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return "เมื่อสักครู่";
-  if (diff < 3600) return `${Math.floor(diff / 60)} นาทีที่แล้ว`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} ชั่วโมงที่แล้ว`;
-  return new Date(iso).toLocaleDateString("th-TH");
-}
+import { useAuth } from "../context/AuthContext";
+import { getOwnerToken, setOwnerToken, dropOwnerToken, getSavedProfile, saveProfile } from "../lib/guest";
+import PostCard, { AuthorLine } from "../components/PostCard";
+import Icon from "../components/Icon";
 
 export default function PostDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isStaff } = useAuth();
   const [post, setPost] = useState(null);
   const [comments, setComments] = useState([]);
   const [error, setError] = useState("");
   const [text, setText] = useState("");
-  const [identify, setIdentify] = useState(true);
-  const [guestName, setGuestName] = useState("");
+  const [anon, setAnon] = useState(true);
+  const [name, setName] = useState("");
+  const [className, setClassName] = useState("");
   const [busy, setBusy] = useState(false);
 
-  function load() {
-    api.get(`/api/posts/${id}`).then((data) => { setPost(data.post); setComments(data.comments); }).catch((err) => setError(err.message));
-  }
-  useEffect(load, [id]);
+  useEffect(() => {
+    const p = getSavedProfile();
+    if (p.name) { setName(p.name); setClassName(p.className || ""); setAnon(false); }
+  }, []);
+
+  useEffect(() => {
+    setPost(null); setError("");
+    api.get(`/api/posts/${id}`)
+      .then((d) => { setPost(d.post); setComments(d.comments); })
+      .catch((e) => setError(e.message));
+  }, [id]);
 
   async function submitComment(e) {
     e.preventDefault();
     if (!text.trim()) return;
-    if (identify && !guestName.trim()) return alert("กรุณากรอกชื่อ หรือเลือกไม่ระบุตัวตน");
+    if (!anon && !name.trim()) return alert("กรุณากรอกชื่อ หรือเลือกไม่ระบุตัวตน");
     setBusy(true);
     try {
-      const data = await api.post(`/api/posts/${id}/comments`, { content: text.trim(), isAnonymous: !identify, guestName: identify ? guestName.trim() : "" });
-      if (data.ownerToken) saveOwnerToken("comment", data.comment.id, data.ownerToken);
+      const data = await api.post(`/api/posts/${id}/comments`, {
+        content: text.trim(), isAnonymous: anon, authorName: anon ? "" : name.trim(), authorClass: anon ? "" : className.trim(),
+      });
+      setOwnerToken("comment", data.comment.id, data.ownerToken);
+      if (!anon) saveProfile(name.trim(), className.trim());
       setComments((prev) => [...prev, data.comment]);
+      setPost((p) => ({ ...p, commentCount: p.commentCount + 1 }));
       setText("");
     } catch (err) {
       alert(err.message);
@@ -46,50 +52,70 @@ export default function PostDetail() {
     }
   }
 
-  async function removeComment(c) {
-    if (!confirm("ลบความคิดเห็นนี้ใช่ไหม?")) return;
+  async function removeComment(commentId) {
+    if (!confirm("ลบคอมเมนต์นี้ใช่ไหม?")) return;
+    const token = getOwnerToken("comment", commentId);
     try {
-      await api.del(`/api/comments/${c.id}`, { "x-owner-token": getOwnerToken("comment", c.id) || "" });
-      setComments((prev) => prev.filter((x) => x.id !== c.id));
+      await api.del(`/api/comments/${commentId}`, { headers: token ? { "x-owner-token": token } : {} });
+      dropOwnerToken("comment", commentId);
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
     } catch (err) {
       alert(err.message);
     }
   }
 
-  if (error) return <p className="max-w-xl mx-auto p-6 text-red-500 text-sm">{error}</p>;
-  if (!post) return <p className="max-w-xl mx-auto p-6 text-slate-400 text-sm text-center">กำลังโหลด...</p>;
+  if (error) return (
+    <div className="relative z-10 max-w-xl mx-auto p-6 text-center">
+      <p className="text-red-500 text-sm">{error}</p>
+      <button onClick={() => navigate("/feed")} className="btn-ghost mt-4">กลับไปหน้าโพสต์</button>
+    </div>
+  );
+  if (!post) return <div className="relative z-10 max-w-xl mx-auto px-4 py-4"><div className="card p-4 skeleton h-48" /></div>;
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-4 pb-28">
-      <button onClick={() => navigate(-1)} className="text-sm text-slate-500 mb-3">← กลับ</button>
-      <PostCard post={post} detailed onChanged={(updated) => (updated === null ? navigate("/") : setPost(updated))} />
+    <div className="relative z-10 max-w-xl mx-auto px-4 py-4 pb-28">
+      <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/feed"))} className="text-sm text-slate-500 mb-3 flex items-center gap-1">
+        <Icon name="left" size={16} /> กลับ
+      </button>
 
-      <div className="card p-4 mt-3">
-        <p className="font-bold mb-3">ความคิดเห็น ({comments.length})</p>
+      <PostCard post={post} detailed onChanged={(u) => (u === null ? navigate("/feed", { replace: true }) : setPost(u))} />
+
+      <div className="card-post p-4 pt-5 mt-3">
+        <p className="font-bold mb-3 flex items-center gap-2"><Icon name="chat" size={18} /> ความคิดเห็น ({comments.length})</p>
+
         <div className="flex flex-col gap-3">
           {comments.map((c) => (
-            <div key={c.id}>
-              <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl px-3 py-2">
-                <p className="text-xs font-semibold">{c.author}</p>
-                <p className="text-sm whitespace-pre-line break-words">{c.content}</p>
+            <div key={c.id} className="bg-slate-100 dark:bg-white/[0.09] rounded-2xl px-3.5 py-2.5">
+              <div className="flex items-start gap-2">
+                <AuthorLine author={c.author} createdAt={c.createdAt} />
+                {(getOwnerToken("comment", c.id) || isStaff) && (
+                  <button onClick={() => removeComment(c.id)} className="text-slate-400 hover:text-red-500 p-1" aria-label="ลบคอมเมนต์"><Icon name="trash" size={15} /></button>
+                )}
               </div>
-              <div className="flex items-center gap-2 mt-0.5 ml-1">
-                <span className="text-[11px] text-slate-400">{timeAgo(c.createdAt)}</span>
-                {c.canManage && <button onClick={() => removeComment(c)} className="text-red-500"><TrashIcon size={12} /></button>}
-              </div>
+              <p className="text-sm whitespace-pre-line break-words mt-1">{c.content}</p>
             </div>
           ))}
-          {comments.length === 0 && <p className="text-sm text-slate-400 text-center">ยังไม่มีความคิดเห็น</p>}
+          {comments.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-300 text-center py-2">ยังไม่มีความคิดเห็น</p>}
         </div>
 
         <form onSubmit={submitComment} className="mt-4 flex flex-col gap-2">
-          <div className="flex gap-2">
-            <button type="button" onClick={() => setIdentify(true)} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border ${identify ? "bg-brand-500 text-white border-transparent" : "border-slate-200 dark:border-slate-700 text-slate-500"}`}>ระบุตัวตน</button>
-            <button type="button" onClick={() => setIdentify(false)} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border ${!identify ? "bg-brand-500 text-white border-transparent" : "border-slate-200 dark:border-slate-700 text-slate-500"}`}>ไม่ระบุตัวตน</button>
+          <div className="flex items-center gap-1.5">
+            {[[false, "user", "ระบุตัวตน"], [true, "eyeoff", "ไม่ระบุตัวตน"]].map(([v, icon, label]) => (
+              <button key={label} type="button" onClick={() => setAnon(v)} className={`chip !py-1 text-xs flex items-center gap-1.5 ${anon === v ? "chip-on" : "chip-off"}`}>
+                <Icon name={icon} size={13} /> {label}
+              </button>
+            ))}
           </div>
-          {identify && <input className="input" placeholder="ชื่อของคุณ" value={guestName} onChange={(e) => setGuestName(e.target.value)} maxLength={50} />}
-          <textarea className="input" rows={2} placeholder="แสดงความคิดเห็น..." value={text} onChange={(e) => setText(e.target.value)} maxLength={500} />
-          <button disabled={busy} className="btn-primary self-end">ส่งความคิดเห็น</button>
+          {!anon && (
+            <div className="grid grid-cols-5 gap-2">
+              <input className="input col-span-3" placeholder="ชื่อ" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
+              <input className="input col-span-2" placeholder="ชั้น/ห้อง" value={className} onChange={(e) => setClassName(e.target.value)} maxLength={30} />
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <textarea className="input resize-none" rows={2} placeholder="แสดงความคิดเห็น..." value={text} onChange={(e) => setText(e.target.value)} maxLength={500} />
+            <button disabled={busy || !text.trim()} className="btn-primary !p-3" aria-label="ส่งความคิดเห็น"><Icon name="send" size={18} /></button>
+          </div>
         </form>
       </div>
     </div>

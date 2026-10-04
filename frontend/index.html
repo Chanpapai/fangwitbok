@@ -1,11 +1,20 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="th" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FangwitBok V2 — ฝากบอก & ตามหาของหาย</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#080b18" />
+  <meta name="description" content="ฝากวิทฝากบอก — ฝากบอกเรื่องราวและตามหาของหายในโรงเรียน" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <title>FangwitBok V2 — ฝากวิทฝากบอก</title>
+  <script>
+    try { if (localStorage.getItem("fwb_theme") === "light") document.documentElement.classList.remove("dark"); } catch (e) {}
+  </script>
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100">
+<body class="bg-slate-50 dark:bg-[#080b18] text-slate-800 dark:text-slate-100 antialiased">
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
 </body>

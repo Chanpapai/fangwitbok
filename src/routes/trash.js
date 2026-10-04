@@ -19,19 +19,19 @@ router.get("/", async (req, res) => {
   const [posts, comments] = await Promise.all([
     prisma.post.findMany({
       where: { deletedAt: { not: null } },
-      include: { author: { select: { displayName: true, studentCode: true } }, images: true },
+      include: { images: true },
       orderBy: { deletedAt: "desc" },
     }),
     prisma.comment.findMany({
       where: { deletedAt: { not: null } },
-      include: { author: { select: { displayName: true, studentCode: true } } },
       orderBy: { deletedAt: "desc" },
     }),
   ]);
+  const who = (x) => (x.isAnonymous ? "ไม่ระบุตัวตน" : x.authorName || "ผู้ใช้ทั่วไป");
 
   res.json({
-    posts: posts.map((p) => ({ ...p, daysUntilPurge: daysLeft(p.deletedAt) })),
-    comments: comments.map((c) => ({ ...c, daysUntilPurge: daysLeft(c.deletedAt) })),
+    posts: posts.map((p) => ({ id: p.id, content: p.content, authorLabel: who(p), deletedAt: p.deletedAt, daysUntilPurge: daysLeft(p.deletedAt) })),
+    comments: comments.map((c) => ({ id: c.id, content: c.content, authorLabel: who(c), deletedAt: c.deletedAt, daysUntilPurge: daysLeft(c.deletedAt) })),
   });
 });
 
@@ -67,7 +67,7 @@ router.delete("/posts/:id", requireRole("SUPER_ADMIN"), async (req, res) => {
   });
   if (!post) return res.status(404).json({ error: "ไม่พบโพสต์นี้ใน Trash" });
 
-  await Promise.all(post.images.map((img) => deleteImageFile(img.path)));
+  await Promise.all(post.images.map((img) => deleteImageFile(img.url)));
   await prisma.post.delete({ where: { id: post.id } });
 
   await logAudit({
