@@ -25,8 +25,9 @@ const cookieOpts = {
   path: "/api/auth", // แนบ cookie นี้เฉพาะ path ของ auth เท่านั้น ลดพื้นผิวการโจมตี
 };
 
+// ทีมงานเข้าสู่ระบบด้วย "ชื่อจริง" (ชื่อที่แสดง) + รหัสผ่าน
 const loginSchema = z.object({
-  studentCode: z.string().trim().min(1).max(20),
+  name: z.string().trim().min(1).max(50),
   password: z.string().min(1).max(72),
 });
 
@@ -45,7 +46,6 @@ async function issueSession(res, user, userAgent) {
 function publicUser(user) {
   return {
     id: user.id,
-    studentCode: user.studentCode,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
     role: user.role,
@@ -54,19 +54,22 @@ function publicUser(user) {
 
 // POST /api/auth/login
 router.post("/login", authLimiter, validateBody(loginSchema), async (req, res) => {
-  const { studentCode, password } = req.body;
-  const user = await prisma.user.findUnique({ where: { studentCode } });
+  const { name, password } = req.body;
+  // ผู้เข้าชมทั่วไปไม่ต้อง Login — ช่องทางนี้ใช้ได้เฉพาะทีมผู้ดูแล (ADMIN / SUPER_ADMIN)
+  const candidates = await prisma.user.findMany({
+    where: { displayName: { equals: name, mode: "insensitive" }, role: { in: ["ADMIN", "SUPER_ADMIN"] } },
+    take: 5,
+  });
 
-  // ข้อความ error เหมือนกันทั้งกรณี "ไม่พบบัญชี" และ "รหัสผิด" กันคนสแกนหารหัสนักเรียนที่มีอยู่จริง
-  const genericError = () => res.status(401).json({ error: "รหัสนักเรียนหรือรหัสผ่านไม่ถูกต้อง" });
+  // ข้อความ error เหมือนกันทั้งกรณี "ไม่พบชื่อ" และ "รหัสผิด" กันคนสแกนหาชื่อทีมงานที่มีอยู่จริง
+  const genericError = () => res.status(401).json({ error: "ชื่อหรือรหัสผ่านไม่ถูกต้อง" });
 
+  let user = null;
+  for (const c of candidates) {
+    if (await verifyPassword(password, c.passwordHash)) { user = c; break; }
+  }
   if (!user) return genericError();
   if (user.isBanned) return res.status(403).json({ error: "บัญชีนี้ถูกระงับการใช้งาน" });
-  // ผู้เข้าชมทั่วไปไม่ต้อง Login — ช่องทาง Login ใช้ได้เฉพาะทีมผู้ดูแล
-  if (user.role === "USER") return genericError();
-
-  const ok = await verifyPassword(password, user.passwordHash);
-  if (!ok) return genericError();
 
   const { accessToken } = await issueSession(res, user, req.headers["user-agent"]);
   res.json({ user: publicUser(user), accessToken });

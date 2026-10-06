@@ -118,6 +118,8 @@ model Post {
   ipHash      String? // hash ของ IP ให้ Admin ตรวจสแปม ไม่เปิดเผยสู่สาธารณะ
   content     String
   location    String? // จุดที่พบ/ทำหาย (สำหรับตามหาของหาย)
+  contactUrl  String? // ลิงก์ติดต่อกลับ (Instagram/Facebook) ที่ผู้โพสต์เลือกใส่เอง — ผ่านการตรวจ URL แล้ว
+  contactType String? // "INSTAGRAM" | "FACEBOOK"
 
   // Soft delete / Trash: ลบแล้วย้ายมาที่นี่ก่อน ลบถาวรอัตโนมัติเมื่อเกิน 15 วัน
   deletedAt   DateTime?
@@ -133,6 +135,7 @@ model Post {
 
   @@index([type, deletedAt])
   @@index([deletedAt]) // ใช้สำหรับ job ลบถาวรอัตโนมัติ (deletedAt < now-15d)
+  @@index([deletedAt, createdAt]) // หน้า Feed: กรองโพสต์ที่ไม่ถูกลบ + เรียงใหม่ไปเก่า
 }
 
 model PostImage {
@@ -244,9 +247,9 @@ model RoleChangeLog {
 // ============================================================
 model Popup {
   id          String    @id @default(uuid())
-  title       String
-  body        String
-  imageUrl    String?
+  title       String    @default("") // ไม่บังคับ (Popup ที่มีแต่รูปได้)
+  body        String    @default("") // ไม่บังคับ
+  imageUrl    String? // เลิกใช้ (รูปเดี่ยวแบบเก่า) — อ่านเป็นรูปแรกถ้ายังไม่มีแถวใน PopupImage
   order       Int       @default(0)
   isActive    Boolean   @default(true)
   startAt     DateTime?
@@ -255,7 +258,29 @@ model Popup {
   createdBy   User      @relation(fields: [createdById], references: [id])
   createdAt   DateTime  @default(now())
 
+  images PopupImage[]
+
   @@index([isActive, order])
+}
+
+// รูปของ Popup (หลายรูปต่อ 1 Popup) เก็บ path ใน Supabase Storage
+model PopupImage {
+  id       String @id @default(uuid())
+  popupId  String
+  popup    Popup  @relation(fields: [popupId], references: [id], onDelete: Cascade)
+  url      String
+  position Int    @default(0)
+
+  @@index([popupId, position])
+}
+
+// ช่องทางการติดต่อบนหน้าแรก (Admin จัดการ): key = instagram | facebook | discord
+model ContactChannel {
+  key         String   @id
+  url         String   @default("")
+  enabled     Boolean  @default(false)
+  updatedById String?
+  updatedAt   DateTime @updatedAt
 }
 
 // ============================================================

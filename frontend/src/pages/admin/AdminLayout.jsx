@@ -23,6 +23,7 @@ const GROUPS = [
     items: [
       { to: "/admin/popups", label: "Popup", icon: "layers" },
       { to: "/admin/rules", label: "กฎการใช้งาน", icon: "book" },
+      { to: "/admin/contacts", label: "ช่องทางการติดต่อ", icon: "link" },
       { to: "/admin/settings", label: "ตั้งค่าหน้าเว็บไซต์", icon: "settings", superOnly: true },
     ],
   },

@@ -54,7 +54,7 @@ export default function AdminSettings() {
         logoPath: logo.path || null, // null = ใช้โลโก้เดิมของระบบ
         profilePath: profile.path || null,
       });
-      await refresh(); // อัปเดตหน้าเว็บที่เปิดอยู่ทันที
+      await refresh(true); // อัปเดตหน้าเว็บที่เปิดอยู่ทันที
       setMsg({ ok: "บันทึกเรียบร้อย — หน้าเว็บอัปเดตแล้ว", err: "" });
     } catch (err) {
       setMsg({ ok: "", err: err.message });

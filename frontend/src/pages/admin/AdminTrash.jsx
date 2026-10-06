@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import Icon from "../../components/Icon";
+import { useDialog } from "../../components/DialogProvider";
 
 export default function AdminTrash() {
+  const { confirm, notify } = useDialog();
   const { user } = useAuth();
   const [data, setData] = useState({ posts: [], comments: [] });
 
@@ -12,9 +14,9 @@ export default function AdminTrash() {
 
   const restore = async (kind, id) => { await api.post(`/api/admin/trash/${kind}/${id}/restore`); load(); };
   async function purgePost(id) {
-    if (!confirm("ลบถาวรทันทีใช่ไหม? กู้คืนไม่ได้อีก (รูปจะถูกลบออกจาก Storage)")) return;
-    await api.del(`/api/admin/trash/posts/${id}`);
-    load();
+    const ok = await confirm({ title: "ลบถาวรทันทีใช่ไหม?", message: "กู้คืนไม่ได้อีก และรูปของโพสต์จะถูกลบออกจากที่เก็บรูปด้วย", confirmText: "ลบถาวร", tone: "danger" });
+    if (!ok) return;
+    try { await api.del(`/api/admin/trash/posts/${id}`); load(); } catch (err) { notify(err.message); }
   }
 
   const Item = ({ x, kind }) => (

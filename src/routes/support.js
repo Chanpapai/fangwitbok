@@ -11,7 +11,7 @@ const { newSecret, sha256, hashIp } = require("../utils/guest");
 const router = express.Router();
 
 const msgSchema = z.object({ body: z.string().trim().min(1, "กรุณาพิมพ์ข้อความ").max(1000) });
-const createSchema = msgSchema.extend({ contact: z.string().trim().max(100).optional().default("") });
+const createSchema = msgSchema; // ไม่มีช่อง "ติดต่อกลับ" แล้ว — ผู้เข้าชมคุยกับแอดมินผ่านห้องแชทนี้โดยตรง
 
 const serializeMsg = (m) => ({ id: m.id, sender: m.sender, adminName: m.adminName, body: m.body, createdAt: m.createdAt });
 
@@ -29,7 +29,6 @@ router.post("/support/threads", supportCreateLimiter, validateBody(createSchema)
   const thread = await prisma.supportThread.create({
     data: {
       tokenHash: secret.hash,
-      contact: sanitizeText(req.body.contact) || null,
       ipHash: hashIp(req.ip),
       unreadForAdmin: 1,
       messages: { create: { sender: "VISITOR", body } },

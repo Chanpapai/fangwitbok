@@ -5,9 +5,11 @@ import { downloadImage } from "../../lib/download";
 import { timeAgo } from "../../lib/format";
 import Icon from "../../components/Icon";
 import ImageLightbox from "../../components/ImageLightbox";
+import { useDialog } from "../../components/DialogProvider";
 
 // คลังรูปที่แนบมากับโพสต์ทั้งหมด (เฉพาะโพสต์ที่ยังไม่ถูกลบ) ดาวน์โหลดได้ทีละรูป
 export default function AdminImages() {
+  const { notify } = useDialog();
   const [images, setImages] = useState(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -30,7 +32,7 @@ export default function AdminImages() {
 
   async function dl(id) {
     setBusyId(id);
-    try { await downloadImage(id); } catch (e) { alert(e.message || "ดาวน์โหลดไม่สำเร็จ"); } finally { setBusyId(null); }
+    try { await downloadImage(id); } catch (e) { notify(e.message || "ดาวน์โหลดไม่สำเร็จ"); } finally { setBusyId(null); }
   }
 
   return (

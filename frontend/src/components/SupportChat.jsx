@@ -6,7 +6,7 @@ import Icon from "./Icon";
 
 const headersFor = (t) => ({ headers: { "x-thread-token": t } });
 
-// ปุ่มติดต่อแอดมินมุมซ้ายล่าง (สไตล์ Call Center) กดแล้วเปิดแชทกับ Admin — ข้อความเก็บในฐานข้อมูลจริง
+// ปุ่มติดต่อแอดมินมุมขวาล่าง (สไตล์ Call Center) กดแล้วเปิดแชทกับ Admin — ข้อความเก็บในฐานข้อมูลจริง
 // ประหยัด Request: ตอนปิดแชทเช็คข้อความใหม่แค่ทุก 60 วินาที (เฉพาะเมื่อมีห้องแชทและแท็บเปิดอยู่), ตอนเปิดทุก 8 วินาที
 export default function SupportChat() {
   const [open, setOpen] = useState(false);
@@ -15,7 +15,6 @@ export default function SupportChat() {
   const [unread, setUnread] = useState(0);
   const [status, setStatus] = useState("OPEN");
   const [text, setText] = useState("");
-  const [contact, setContact] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const bottom = useRef(null);
@@ -58,7 +57,7 @@ export default function SupportChat() {
     setError("");
     try {
       if (!token) {
-        const data = await api.post("/api/support/threads", { body, contact: contact.trim() });
+        const data = await api.post("/api/support/threads", { body });
         setThreadToken(data.threadToken);
         setToken(data.threadToken);
         setMessages(data.messages);
@@ -77,7 +76,7 @@ export default function SupportChat() {
 
   return (
     <>
-      {/* ปุ่มติดต่อแอดมิน: มุมซ้ายล่าง สไตล์ Call Center (หูฟัง + ข้อความ) เข้าใจง่ายกว่าวงกลมไอคอนล้วน */}
+      {/* ปุ่มติดต่อแอดมิน: มุมขวาล่าง สไตล์ Call Center (หูฟัง + ข้อความ) เข้าใจง่ายกว่าวงกลมไอคอนล้วน */}
       <button
         onClick={() => setOpen(true)} aria-label="ติดต่อแอดมิน"
         style={{ bottom: `calc(env(safe-area-inset-bottom) + ${pathname === "/" ? 100 : 72}px)` }}
@@ -116,9 +115,6 @@ export default function SupportChat() {
             </div>
 
             <form onSubmit={send} className="p-3 border-t border-slate-200 dark:border-white/10 flex flex-col gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              {!token && (
-                <input className="input" placeholder="ช่องทางติดต่อกลับ เช่น ชื่อ/ชั้น (ไม่บังคับ)" maxLength={100} value={contact} onChange={(e) => setContact(e.target.value)} />
-              )}
               {error && <p className="text-xs text-red-500">{error}</p>}
               <div className="flex items-end gap-2">
                 <textarea className="input !py-2 resize-none" rows={1} maxLength={1000} placeholder="พิมพ์ข้อความ..." value={text} onChange={(e) => setText(e.target.value)}

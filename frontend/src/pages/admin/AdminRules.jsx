@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import Icon from "../../components/Icon";
 import ImageUploader from "./ImageUploader";
+import { useDialog } from "../../components/DialogProvider";
 
 export default function AdminRules() {
+  const { confirm } = useDialog();
   const [blocks, setBlocks] = useState([]);
   const [newText, setNewText] = useState("");
   const [editing, setEditing] = useState({}); // id -> ข้อความที่กำลังแก้
@@ -24,7 +26,10 @@ export default function AdminRules() {
     setEditing((e) => { const n = { ...e }; delete n[b.id]; return n; });
   });
   const replaceImage = (b, { path }) => path && run(() => api.patch(`/api/admin/rules/${b.id}`, { imageUrl: path }));
-  const remove = (b) => confirm("ลบบล็อกนี้ใช่ไหม?") && run(() => api.del(`/api/admin/rules/${b.id}`));
+  const remove = async (b) => {
+    const ok = await confirm({ title: "ลบบล็อกนี้ใช่ไหม?", message: b.type === "IMAGE" ? "รูปนี้จะถูกลบออกจากหน้ากฎการใช้งาน" : "ข้อความนี้จะถูกลบออกจากหน้ากฎการใช้งาน", confirmText: "ลบบล็อก", tone: "danger" });
+    if (ok) run(() => api.del(`/api/admin/rules/${b.id}`));
+  };
   const move = (i, d) => {
     const ids = blocks.map((b) => b.id);
     const j = i + d;

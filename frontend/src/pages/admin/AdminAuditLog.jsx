@@ -23,7 +23,7 @@ export default function AdminAuditLog() {
             <p className="text-[11px] text-slate-400 shrink-0">{new Date(log.createdAt).toLocaleString("th-TH")}</p>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            โดย {log.actor ? `${log.actor.displayName} (${log.actor.studentCode}, ${log.actor.role})` : "ระบบอัตโนมัติ"} · เป้าหมาย: {log.targetType} #{log.targetId.slice(0, 8)}
+            โดย {log.actor ? `${log.actor.displayName} (${log.actor.role})` : "ระบบอัตโนมัติ"} · เป้าหมาย: {log.targetType} #{log.targetId.slice(0, 8)}
           </p>
           {log.metadata && <pre className="text-[11px] bg-slate-100 dark:bg-white/[0.06] rounded-lg p-2 mt-1.5 overflow-x-auto">{JSON.stringify(log.metadata, null, 2)}</pre>}
         </div>

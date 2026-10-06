@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const express = require("express");
 const { z } = require("zod");
 const prisma = require("../config/db");
@@ -49,8 +50,7 @@ router.get("/", async (req, res) => {
     page(`
       <h1>สร้างบัญชี Super Admin คนแรก</h1>
       <form method="POST" action="/api/setup?token=${encodeURIComponent(req.query.token)}">
-        <input name="studentCode" placeholder="รหัสนักเรียน/รหัสแอดมิน เช่น admin001" required minlength="4" maxlength="20" />
-        <input name="displayName" placeholder="ชื่อที่แสดง" required maxlength="50" />
+        <input name="displayName" placeholder="ชื่อจริง (ใช้เข้าสู่ระบบ)" required maxlength="50" />
         <input name="password" type="password" placeholder="รหัสผ่าน (อย่างน้อย 8 ตัว มีตัวเลข)" required minlength="8" maxlength="72" />
         <button type="submit">สร้างบัญชี</button>
       </form>
@@ -60,7 +60,6 @@ router.get("/", async (req, res) => {
 });
 
 const setupSchema = z.object({
-  studentCode: z.string().trim().min(4).max(20).regex(/^[a-zA-Z0-9._-]+$/),
   password: z.string().min(8).max(72).regex(/[0-9]/, "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว"),
   displayName: z.string().trim().min(1).max(50),
 });
@@ -79,11 +78,8 @@ router.post("/", express.urlencoded({ extended: false }), async (req, res) => {
     return res.status(400).send(page(`<h1>ข้อมูลไม่ถูกต้อง</h1><p>${Object.values(parsed.error.flatten().fieldErrors).flat().join(", ")}</p><a href="javascript:history.back()">← กลับไปกรอกใหม่</a>`));
   }
 
-  const { studentCode, password, displayName } = parsed.data;
-  const dup = await prisma.user.findUnique({ where: { studentCode } });
-  if (dup) {
-    return res.status(409).send(page("<h1>รหัสนี้ถูกใช้แล้ว</h1><p>ลองใช้รหัสนักเรียนอื่น แล้วกลับไปเปิดลิงก์ใหม่อีกครั้ง</p>"));
-  }
+  const { password, displayName } = parsed.data;
+  const studentCode = `staff-${crypto.randomBytes(6).toString("hex")}`; // ค่าภายใน ไม่ใช้เข้าสู่ระบบ
 
   const passwordHash = await hashPassword(password);
   await prisma.user.create({ data: { studentCode, passwordHash, displayName, role: "SUPER_ADMIN" } });
@@ -91,7 +87,7 @@ router.post("/", express.urlencoded({ extended: false }), async (req, res) => {
   res.send(
     page(`
       <h1>สร้างบัญชีสำเร็จ!</h1>
-      <p>รหัสนักเรียน: <b>${studentCode}</b><br/>ใช้รหัสผ่านที่เพิ่งตั้งเข้าสู่ระบบที่หน้าเว็บ FangwitBok ของคุณได้เลย</p>
+      <p>เข้าสู่ระบบที่หน้าเว็บ FangwitBok ด้วย "ชื่อจริง" ที่เพิ่งกรอก และรหัสผ่านที่เพิ่งตั้งได้เลย</p>
       <p>หน้านี้ใช้งานไม่ได้อีกแล้ว แนะนำให้ลบค่า SETUP_SECRET ออกจากการตั้งค่าเซิร์ฟเวอร์เพื่อความปลอดภัย</p>
     `)
   );

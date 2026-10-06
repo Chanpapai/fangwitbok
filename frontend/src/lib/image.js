@@ -1,9 +1,19 @@
 // ย่อรูปบนเครื่องผู้ใช้ก่อนอัปโหลด: รูปจากมือถือมักใหญ่เกิน 5MB และเปลือง Bandwidth ของ Free Tier
-// ถ้าเบราว์เซอร์ย่อไม่ได้จะคืนไฟล์เดิม (Backend ยังตรวจและย่อซ้ำอีกชั้น)
-export const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+// ถ้าเบราว์เซอร์ย่อไม่ได้จะคืนไฟล์เดิม (Backend ยังตรวจ "ไฟล์จริง" และย่อซ้ำอีกชั้น)
+export const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+export const ACCEPT_ATTR = "image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif";
+export const TYPE_ERROR = "รองรับเฉพาะไฟล์ JPG, PNG, WebP, GIF เท่านั้น";
 export const MAX_BYTES = 5 * 1024 * 1024;
 
+// มือถือ/Chromebook บางรุ่นส่ง file.type ว่าง จึงเช็กนามสกุลไฟล์เป็นตัวสำรอง
+export function isAllowedImage(file) {
+  if (ALLOWED_TYPES.includes(file.type)) return true;
+  return (!file.type || file.type === "application/octet-stream") && /\.(jpe?g|png|webp|gif)$/i.test(file.name || "");
+}
+
 export async function shrinkImage(file, maxSide = 1600, quality = 0.85) {
+  // GIF: ห้ามผ่าน canvas เพราะจะเสียแอนิเมชัน (เหลือเฟรมแรก) — ส่งไฟล์เดิม ให้ Backend ย่อแบบคงแอนิเมชัน
+  if (file.type === "image/gif" || /\.gif$/i.test(file.name || "")) return file;
   try {
     const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
     const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));

@@ -5,8 +5,10 @@ import { useAuth } from "../context/AuthContext";
 import { getOwnerToken, setOwnerToken, dropOwnerToken, getSavedProfile, saveProfile } from "../lib/guest";
 import PostCard, { AuthorLine } from "../components/PostCard";
 import Icon from "../components/Icon";
+import { useDialog } from "../components/DialogProvider";
 
 export default function PostDetail() {
+  const { confirm, notify } = useDialog();
   const { id } = useParams();
   const navigate = useNavigate();
   const { isStaff } = useAuth();
@@ -34,7 +36,7 @@ export default function PostDetail() {
   async function submitComment(e) {
     e.preventDefault();
     if (!text.trim()) return;
-    if (!anon && !name.trim()) return alert("กรุณากรอกชื่อ หรือเลือกไม่ระบุตัวตน");
+    if (!anon && !name.trim()) return notify("กรุณากรอกชื่อ หรือเลือกไม่ระบุตัวตน");
     setBusy(true);
     try {
       const data = await api.post(`/api/posts/${id}/comments`, {
@@ -46,21 +48,22 @@ export default function PostDetail() {
       setPost((p) => ({ ...p, commentCount: p.commentCount + 1 }));
       setText("");
     } catch (err) {
-      alert(err.message);
+      notify(err.message);
     } finally {
       setBusy(false);
     }
   }
 
   async function removeComment(commentId) {
-    if (!confirm("ลบคอมเมนต์นี้ใช่ไหม?")) return;
+    const ok = await confirm({ title: "ลบความคิดเห็นนี้ใช่ไหม?", message: "ความคิดเห็นจะถูกลบออกจากโพสต์", confirmText: "ลบความคิดเห็น", tone: "danger" });
+    if (!ok) return;
     const token = getOwnerToken("comment", commentId);
     try {
       await api.del(`/api/comments/${commentId}`, { headers: token ? { "x-owner-token": token } : {} });
       dropOwnerToken("comment", commentId);
       setComments((prev) => prev.filter((c) => c.id !== commentId));
     } catch (err) {
-      alert(err.message);
+      notify(err.message);
     }
   }
 

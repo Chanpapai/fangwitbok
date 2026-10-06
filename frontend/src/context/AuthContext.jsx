@@ -19,8 +19,8 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  const login = useCallback(async (studentCode, password) => {
-    const data = await api.post("/api/auth/login", { studentCode, password });
+  const login = useCallback(async (name, password) => {
+    const data = await api.post("/api/auth/login", { name, password });
     setAccessToken(data.accessToken);
     setUser(data.user);
     setStaffFlag(true);

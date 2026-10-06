@@ -4,13 +4,14 @@ import { useAuth } from "../context/AuthContext";
 import Icon from "../components/Icon";
 import { useSite } from "../context/SiteContext";
 
-// หน้าเข้าสู่ระบบสำหรับทีมงาน (ไม่มีลิงก์ในเมนู) — ผู้ใช้ทั่วไปไม่ต้องใช้หน้านี้
+// หน้าเข้าสู่ระบบสำหรับทีมงาน (ไม่มีลิงก์ในเมนู) — ใช้ "ชื่อจริง" + รหัสผ่าน
 export default function StaffLogin() {
   const { login, isStaff, loading } = useAuth();
   const { logoSm } = useSite();
   const navigate = useNavigate();
-  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -21,7 +22,7 @@ export default function StaffLogin() {
     setBusy(true);
     setError("");
     try {
-      const u = await login(code, password);
+      const u = await login(name, password);
       if (u.role === "USER") throw new Error("บัญชีนี้ไม่มีสิทธิ์เข้าหลังบ้าน");
       navigate("/admin", { replace: true });
     } catch (err) {
@@ -36,8 +37,14 @@ export default function StaffLogin() {
       <img src={logoSm} alt="" className="h-16 w-auto mx-auto mb-6" />
       <form onSubmit={submit} className="card p-5 flex flex-col gap-3">
         <p className="font-bold text-lg text-center flex items-center justify-center gap-2"><Icon name="shield" size={20} /> เข้าสู่ระบบทีมงาน</p>
-        <input className="input" placeholder="รหัสผู้ดูแล" value={code} onChange={(e) => setCode(e.target.value)} required autoComplete="username" />
-        <input className="input" type="password" placeholder="รหัสผ่าน" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
+        <input className="input" placeholder="ชื่อจริง" value={name} onChange={(e) => setName(e.target.value)} required maxLength={50} autoComplete="username" />
+        <div className="relative">
+          <input className="input pr-11" type={show ? "text" : "password"} placeholder="รหัสผ่าน" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
+          <button type="button" onClick={() => setShow((v) => !v)} aria-label={show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"} aria-pressed={show}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full text-slate-500 dark:text-slate-300 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/10">
+            <Icon name={show ? "eyeoff" : "eye"} size={18} />
+          </button>
+        </div>
         {error && <p className="text-sm text-red-500">{error}</p>}
         <button disabled={busy} className="btn-primary w-full py-2.5">{busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}</button>
       </form>

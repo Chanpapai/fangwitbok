@@ -5,6 +5,7 @@ import { downloadImage, downloadMany } from "../../lib/download";
 import { timeAgo } from "../../lib/format";
 import Icon from "../../components/Icon";
 import ImageLightbox from "../../components/ImageLightbox";
+import { useDialog } from "../../components/DialogProvider";
 
 const TYPES = [
   { key: "", label: "ทั้งหมด" },
@@ -13,6 +14,7 @@ const TYPES = [
 ];
 
 export default function AdminPosts() {
+  const { confirm, notify } = useDialog();
   const { reloadStats } = useOutletContext();
   const [type, setType] = useState("");
   const [hasImage, setHasImage] = useState(false);
@@ -47,17 +49,18 @@ export default function AdminPosts() {
   }
 
   async function remove(id) {
-    if (!confirm("ลบโพสต์นี้ (ย้ายเข้าถังขยะ กู้คืนได้ภายใน 15 วัน) ใช่ไหม?")) return;
+    const ok = await confirm({ title: "ลบโพสต์นี้ใช่ไหม?", message: "โพสต์จะถูกย้ายเข้าถังขยะ และกู้คืนได้ภายใน 15 วัน", confirmText: "ลบโพสต์", tone: "danger" });
+    if (!ok) return;
     setBusyId(id);
     try {
       await api.del(`/api/posts/${id}`);
       setPosts((prev) => prev.filter((p) => p.id !== id));
       reloadStats();
-    } catch (e) { alert(e.message); } finally { setBusyId(null); }
+    } catch (e) { notify(e.message); } finally { setBusyId(null); }
   }
 
   async function dl(fn) {
-    try { await fn(); } catch (e) { alert(e.message || "ดาวน์โหลดไม่สำเร็จ"); }
+    try { await fn(); } catch (e) { notify(e.message || "ดาวน์โหลดไม่สำเร็จ"); }
   }
 
   return (

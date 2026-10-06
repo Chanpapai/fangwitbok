@@ -7,6 +7,7 @@ export const DEFAULT_SITE = {
   postConfirmMessage: "โปรดคิดให้ดีก่อนทำการส่ง เพราะไม่สามารถลบได้ หากต้องการลบให้แจ้งแอดมิน",
   logoUrl: null,
   profileUrl: null,
+  contacts: [], // ช่องทางติดต่อที่ Admin เปิดไว้: [{ key, url }]
 };
 const CACHE_KEY = "fwb_site";
 
@@ -20,9 +21,10 @@ const SiteContext = createContext(null);
 export function SiteProvider({ children }) {
   const [site, setSite] = useState(cached);
 
-  const refresh = useCallback(async () => {
+  // bust = true เฉพาะหลัง Admin เพิ่งบันทึกการตั้งค่า (กัน cache) — โหลดปกติใช้ cache ของเบราว์เซอร์/CDN ลดภาระ Backend
+  const refresh = useCallback(async (bust = false) => {
     try {
-      const d = await api.get(`/api/settings?t=${Date.now()}`); // ?t= กัน cache หลัง Super Admin เพิ่งบันทึก
+      const d = await api.get(bust ? `/api/settings?t=${Date.now()}` : "/api/settings");
       const next = { ...DEFAULT_SITE, ...d };
       setSite(next);
       try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch { /* โหมดส่วนตัว */ }

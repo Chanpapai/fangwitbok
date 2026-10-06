@@ -8,6 +8,7 @@ const { sanitizeText } = require("../utils/sanitize");
 const { logAudit } = require("../utils/audit");
 const { publicUrl } = require("../config/storage");
 const { deleteImageFile } = require("../utils/image");
+const { normalizeUrl } = require("../utils/social");
 
 const router = express.Router();
 const staff = [requireAuth, requireRole("ADMIN")];
@@ -45,9 +46,59 @@ const serialize = (s) => ({
 
 // GET /api/settings — สาธารณะ: ข้อความหน้าแรก/ข้อความยืนยันก่อนโพสต์/โลโก้/รูปโปรไฟล์ (cache สั้น ๆ ลด query)
 router.get("/settings", async (_req, res) => {
-  const s = serialize(await loadSettings());
+  const [settings, channels] = await Promise.all([
+    loadSettings(),
+    prisma.contactChannel.findMany({ where: { enabled: true, url: { not: "" } }, select: { key: true, url: true } }),
+  ]);
+  const s = serialize(settings);
+  // ช่องทางติดต่อ: ส่งเฉพาะรายการที่เปิดแสดงและมีลิงก์ (รายการที่ปิดไม่ถูกส่งออกไปเลย)
+  const contacts = CONTACT_KEYS.map((c) => channels.find((x) => x.key === c.key)).filter(Boolean);
   res.set("Cache-Control", "public, max-age=10");
-  res.json({ homeHeadline: s.homeHeadline, postConfirmMessage: s.postConfirmMessage, logoUrl: s.logoUrl, profileUrl: s.profileUrl });
+  res.json({ homeHeadline: s.homeHeadline, postConfirmMessage: s.postConfirmMessage, logoUrl: s.logoUrl, profileUrl: s.profileUrl, contacts });
+});
+
+// ---------------------------------------------------------------------------
+// ช่องทางการติดต่อบนหน้าแรก (Instagram / Facebook / Discord) — Admin เปิด/ปิดและตั้งลิงก์เองได้ เก็บใน DB
+// ---------------------------------------------------------------------------
+const CONTACT_KEYS = [
+  { key: "instagram", type: "INSTAGRAM", label: "Instagram" },
+  { key: "facebook", type: "FACEBOOK", label: "Facebook" },
+  { key: "discord", type: "DISCORD", label: "Discord" },
+];
+
+router.get("/admin/contacts", ...staff, async (_req, res) => {
+  const rows = await prisma.contactChannel.findMany();
+  res.json({
+    channels: CONTACT_KEYS.map((c) => {
+      const r = rows.find((x) => x.key === c.key);
+      return { key: c.key, label: c.label, url: r?.url || "", enabled: r?.enabled || false };
+    }),
+  });
+});
+
+const contactSchema = z.object({ url: z.string().trim().max(200).default(""), enabled: z.boolean() });
+
+router.put("/admin/contacts/:key", ...staff, writeLimiter, validateBody(contactSchema), async (req, res) => {
+  const c = CONTACT_KEYS.find((x) => x.key === req.params.key);
+  if (!c) return res.status(404).json({ error: "ไม่พบช่องทางนี้" });
+  const { url, enabled } = req.body;
+  let clean = "";
+  if (url) {
+    const n = normalizeUrl(url, [c.type]);
+    if (!n) return res.status(400).json({ error: `ลิงก์ไม่ถูกต้อง (ต้องเป็นลิงก์ ${c.label} เท่านั้น)` });
+    clean = n.url;
+  }
+  if (enabled && !clean) return res.status(400).json({ error: "กรุณาใส่ลิงก์ก่อนเปิดแสดงผล" });
+  const row = await prisma.contactChannel.upsert({
+    where: { key: c.key },
+    create: { key: c.key, url: clean, enabled, updatedById: req.user.id },
+    update: { url: clean, enabled, updatedById: req.user.id },
+  });
+  await logAudit({
+    actorId: req.user.id, action: "CONTACT_UPDATE", targetType: "SETTINGS", targetId: c.key,
+    metadata: { enabled }, ipAddress: req.ip,
+  });
+  res.json({ channel: { key: row.key, label: c.label, url: row.url, enabled: row.enabled } });
 });
 
 // GET /api/admin/settings — ค่าปัจจุบันสำหรับหน้าตั้งค่า (มี path ไว้ส่งกลับตอนบันทึก)

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { timeAgo } from "../../lib/format";
 import Icon from "../../components/Icon";
+import { useDialog } from "../../components/DialogProvider";
 
 const STATUS_TABS = [
   { key: "PENDING", label: "รอตรวจ" },
@@ -11,6 +12,7 @@ const STATUS_TABS = [
 ];
 
 export default function AdminReports() {
+  const { confirm, notify } = useDialog();
   const [status, setStatus] = useState("PENDING");
   const [reports, setReports] = useState([]);
   const [busyId, setBusyId] = useState(null);
@@ -21,12 +23,13 @@ export default function AdminReports() {
   async function resolve(id, newStatus) {
     setBusyId(id);
     try { await api.post(`/api/admin/reports/${id}/resolve`, { status: newStatus }); load(); }
-    catch (err) { alert(err.message); } finally { setBusyId(null); }
+    catch (err) { notify(err.message); } finally { setBusyId(null); }
   }
 
   async function deletePost(postId) {
-    if (!confirm("ลบโพสต์นี้ (ย้ายเข้า Trash) ใช่ไหม?")) return;
-    try { await api.del(`/api/posts/${postId}`); load(); } catch (err) { alert(err.message); }
+    const ok = await confirm({ title: "ลบโพสต์นี้ใช่ไหม?", message: "โพสต์จะถูกย้ายเข้าถังขยะ และกู้คืนได้ภายใน 15 วัน", confirmText: "ลบโพสต์", tone: "danger" });
+    if (!ok) return;
+    try { await api.del(`/api/posts/${postId}`); load(); } catch (err) { notify(err.message); }
   }
 
   return (

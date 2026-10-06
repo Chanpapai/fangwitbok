@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { timeAgo } from "../../lib/format";
 import Icon from "../../components/Icon";
+import { useDialog } from "../../components/DialogProvider";
 
 export default function AdminSupport() {
+  const { notify } = useDialog();
   const [status, setStatus] = useState("OPEN");
   const [threads, setThreads] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -39,7 +41,7 @@ export default function AdminSupport() {
       setDetail((cur) => ({ ...cur, messages: [...cur.messages, d.message] }));
       setText("");
       loadList();
-    } catch (err) { alert(err.message); } finally { setBusy(false); }
+    } catch (err) { notify(err.message); } finally { setBusy(false); }
   }
 
   async function setThreadStatus(next) {
@@ -53,7 +55,7 @@ export default function AdminSupport() {
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 dark:border-white/10">
           <button onClick={() => { setActiveId(null); setDetail(null); loadList(); }} className="btn-ghost !p-2" aria-label="กลับ"><Icon name="left" size={16} /></button>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold truncate">{detail.thread.contact || "ผู้เข้าชมไม่ระบุช่องทางติดต่อ"}</p>
+            <p className="text-sm font-semibold truncate">ผู้เข้าชม #{detail.thread.id.slice(0, 4)}</p>
             <p className="text-[11px] text-slate-400">{detail.thread.status === "OPEN" ? "กำลังดำเนินการ" : "ปิดแล้ว"}</p>
           </div>
           <button onClick={() => setThreadStatus(detail.thread.status === "OPEN" ? "CLOSED" : "OPEN")} className="btn-ghost !py-1.5 text-xs">
@@ -91,7 +93,7 @@ export default function AdminSupport() {
             <Icon name="chat" size={18} className="mt-0.5 text-brand-500" />
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">
-                <span className="text-sm font-semibold truncate">{t.contact || "ผู้เข้าชม"}</span>
+                <span className="text-sm font-semibold truncate">ผู้เข้าชม #{t.id.slice(0, 4)}</span>
                 {t.unreadForAdmin > 0 && <span className="badge bg-rose-500/15 text-rose-500">{t.unreadForAdmin} ใหม่</span>}
               </span>
               <span className="block text-xs text-slate-500 truncate mt-0.5">{t.lastMessage ? `${t.lastMessage.sender === "ADMIN" ? "ตอบแล้ว: " : ""}${t.lastMessage.body}` : ""}</span>

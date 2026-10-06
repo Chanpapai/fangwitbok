@@ -10,6 +10,7 @@ const { logAudit } = require("../utils/audit");
 const { notifyAdmins } = require("../utils/notify");
 const { publicUrl } = require("../config/storage");
 const { hashIp, voterKeyFrom } = require("../utils/guest");
+const { normalizeUrl } = require("../utils/social");
 
 const router = express.Router();
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -24,10 +25,14 @@ const createPostSchema = z
     authorName: z.string().trim().max(60).optional().default(""),
     authorClass: z.string().trim().max(30).optional().default(""),
     location: z.string().trim().max(200).optional().default(""),
+    contactUrl: z.string().trim().max(200).optional().default(""), // ช่องทางติดต่อกลับ (ไม่บังคับ): Instagram / Facebook เท่านั้น
   })
   .superRefine((v, ctx) => {
     if (!v.isAnonymous && !v.authorName) {
       ctx.addIssue({ code: "custom", path: ["authorName"], message: "กรุณากรอกชื่อ หรือเลือกไม่ระบุตัวตน" });
+    }
+    if (v.contactUrl && !normalizeUrl(v.contactUrl, ["INSTAGRAM", "FACEBOOK"])) {
+      ctx.addIssue({ code: "custom", path: ["contactUrl"], message: "ใส่ได้เฉพาะลิงก์ Instagram หรือ Facebook ที่ถูกต้อง" });
     }
   });
 
@@ -48,6 +53,7 @@ function serializePost(post) {
     content: post.content,
     location: post.location,
     createdAt: post.createdAt,
+    contact: post.contactUrl ? { url: post.contactUrl, type: post.contactType } : null, // เฉพาะลิงก์ที่ผู้โพสต์เลือกใส่เอง
     images: post.images.map((i) => ({ url: publicUrl(i.url), width: i.width, height: i.height })).filter((i) => i.url),
     likeCount: post._count?.likes ?? 0,
     commentCount: post._count?.comments ?? 0,
@@ -117,7 +123,8 @@ router.post("/", postLimiter, upload.array("images", MAX_FILES), async (req, res
   if (!parsed.success) {
     return res.status(400).json({ error: "ข้อมูลไม่ถูกต้อง", details: parsed.error.flatten().fieldErrors });
   }
-  const { type, content, isAnonymous, authorName, authorClass, location } = parsed.data;
+  const { type, content, isAnonymous, authorName, authorClass, location, contactUrl } = parsed.data;
+  const contact = contactUrl ? normalizeUrl(contactUrl, ["INSTAGRAM", "FACEBOOK"]) : null;
 
   let images = [];
   try {
@@ -145,6 +152,8 @@ router.post("/", postLimiter, upload.array("images", MAX_FILES), async (req, res
         ipHash: hashIp(req.ip),
         content: sanitizeText(content),
         location: type === "LOST_FOUND" ? sanitizeText(location) || null : null,
+        contactUrl: contact?.url || null,
+        contactType: contact?.type || null,
         images: { create: images.map((im, i) => ({ url: im.path, width: im.width, height: im.height, position: i })) },
       },
       include: postInclude(null),

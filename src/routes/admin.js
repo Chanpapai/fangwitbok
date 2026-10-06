@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const express = require("express");
 const { z } = require("zod");
 const prisma = require("../config/db");
@@ -10,13 +11,16 @@ const router = express.Router();
 
 router.use(requireAuth);
 
-// GET /api/admin/users — รายชื่อผู้ใช้ (ดูได้ตั้งแต่ระดับ Admin ขึ้นไป)
+const STAFF_ROLES = ["ADMIN", "SUPER_ADMIN"];
+
+// GET /api/admin/users — รายชื่อทีมงาน (ดูได้ตั้งแต่ระดับ Admin ขึ้นไป)
 router.get("/users", requireRole("ADMIN"), async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const pageSize = 30;
   const users = await prisma.user.findMany({
+    where: { role: { in: STAFF_ROLES } },
     select: {
-      id: true, studentCode: true, displayName: true, role: true,
+      id: true, displayName: true, role: true,
       isBanned: true, createdAt: true,
     },
     orderBy: { createdAt: "desc" },
@@ -27,19 +31,25 @@ router.get("/users", requireRole("ADMIN"), async (req, res) => {
 });
 
 const createAdminSchema = z.object({
-  studentCode: z.string().trim().min(4).max(20).regex(/^[a-zA-Z0-9._-]+$/, "รหัสมีอักขระไม่ถูกต้อง"),
   password: z.string().min(8).max(72).regex(/[0-9]/, "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว"),
-  displayName: z.string().trim().min(1).max(50),
+  displayName: z.string().trim().min(1, "กรุณากรอกชื่อจริง").max(50), // ใช้เป็นชื่อสำหรับเข้าสู่ระบบ
   role: z.enum(["ADMIN", "SUPER_ADMIN"]).default("ADMIN"),
 });
 
 // POST /api/admin/users — Super Admin สร้างบัญชีทีมผู้ดูแล (ผู้เข้าชมทั่วไปไม่มีบัญชี)
 router.post("/users", requireRole("SUPER_ADMIN"), validateBody(createAdminSchema), async (req, res) => {
-  const { studentCode, password, displayName, role } = req.body;
-  if (await prisma.user.findUnique({ where: { studentCode } })) return res.status(409).json({ error: "รหัสนี้ถูกใช้แล้ว" });
+  const { password, displayName, role } = req.body;
+  // ชื่อต้องไม่ซ้ำกับทีมงานคนอื่น (ใช้เป็นชื่อเข้าสู่ระบบ)
+  const dup = await prisma.user.findFirst({
+    where: { displayName: { equals: displayName, mode: "insensitive" }, role: { in: STAFF_ROLES } },
+    select: { id: true },
+  });
+  if (dup) return res.status(409).json({ error: "มีทีมงานใช้ชื่อนี้แล้ว กรุณาใช้ชื่ออื่น" });
+  // คอลัมน์ studentCode ยังเป็น unique/required ในฐานข้อมูล จึงสร้างค่าภายในให้อัตโนมัติ (ไม่แสดง ไม่ใช้เข้าสู่ระบบ)
+  const studentCode = `staff-${crypto.randomBytes(6).toString("hex")}`;
   const user = await prisma.user.create({ data: { studentCode, displayName, role, passwordHash: await hashPassword(password) } });
   await logAudit({ actorId: req.user.id, action: "ADMIN_CREATE", targetType: "USER", targetId: user.id, metadata: { role }, ipAddress: req.ip });
-  res.status(201).json({ user: { id: user.id, studentCode: user.studentCode, displayName: user.displayName, role: user.role } });
+  res.status(201).json({ user: { id: user.id, displayName: user.displayName, role: user.role } });
 });
 
 const roleChangeSchema = z.object({ role: z.enum(["USER", "ADMIN", "SUPER_ADMIN"]) });
@@ -71,6 +81,10 @@ router.post(
 
     const fromRole = target.role;
     const updated = await prisma.user.update({ where: { id: userId }, data: { role: toRole } });
+    // ถอดสิทธิ์ทีมงาน (เป็น USER): ยกเลิกทุกเซสชันที่ล็อกอินค้างอยู่ทันที (สิทธิ์จริงถูกตรวจจาก DB ทุกคำขออยู่แล้ว)
+    if (toRole === "USER") {
+      await prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    }
 
     await prisma.roleChangeLog.create({
       data: { targetUserId: userId, fromRole, toRole, changedById: req.user.id },
@@ -84,7 +98,7 @@ router.post(
       ipAddress: req.ip,
     });
 
-    res.json({ user: { id: updated.id, studentCode: updated.studentCode, role: updated.role } });
+    res.json({ user: { id: updated.id, role: updated.role } });
   }
 );
 
@@ -133,7 +147,7 @@ router.get("/audit-logs", requireRole("ADMIN"), async (req, res) => {
 
   const logs = await prisma.auditLog.findMany({
     where,
-    include: { actor: { select: { displayName: true, studentCode: true, role: true } } },
+    include: { actor: { select: { displayName: true, role: true } } },
     orderBy: { createdAt: "desc" },
     skip: (page - 1) * pageSize,
     take: pageSize,

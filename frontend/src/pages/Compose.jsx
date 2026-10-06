@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { getSavedProfile, saveProfile } from "../lib/guest";
 import { useSite } from "../context/SiteContext";
-import { ALLOWED_TYPES, MAX_BYTES, shrinkImage } from "../lib/image";
+import { ACCEPT_ATTR, MAX_BYTES, TYPE_ERROR, isAllowedImage, shrinkImage } from "../lib/image";
+import { parseSocialUrl } from "../lib/contact";
 import Icon from "../components/Icon";
 
 const MAX_FILES = 5;
@@ -18,6 +19,7 @@ export default function Compose() {
   const [location, setLocation] = useState("");
   const [name, setName] = useState("");
   const [className, setClassName] = useState("");
+  const [contactUrl, setContactUrl] = useState(""); // ช่องทางติดต่อกลับ (ไม่บังคับ): Instagram / Facebook
   const [website, setWebsite] = useState(""); // honeypot
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -40,7 +42,7 @@ export default function Compose() {
     const next = [...files];
     for (const f of picked) {
       if (next.length >= MAX_FILES) break;
-      if (!ALLOWED_TYPES.includes(f.type)) return setError("รองรับเฉพาะไฟล์ JPG, PNG, WebP เท่านั้น");
+      if (!isAllowedImage(f)) return setError(TYPE_ERROR);
       const small = await shrinkImage(f);
       if (small.size > MAX_BYTES) return setError("ไฟล์ใหญ่เกินไป (สูงสุด 5MB ต่อไฟล์)");
       next.push(small);
@@ -60,6 +62,7 @@ export default function Compose() {
     e.preventDefault();
     if (!content.trim()) return setError("กรุณากรอกข้อความ");
     if (identity === "named" && !name.trim()) return setError("กรุณากรอกชื่อ");
+    if (contactUrl.trim() && !parseSocialUrl(contactUrl)) return setError("ช่องทางติดต่อกลับใส่ได้เฉพาะลิงก์ Instagram หรือ Facebook ที่ถูกต้อง");
     setError("");
     setConfirmOpen(true);
   }
@@ -79,6 +82,7 @@ export default function Compose() {
         if (className.trim()) form.append("authorClass", className.trim());
       }
       if (type === "LOST_FOUND" && location.trim()) form.append("location", location.trim());
+      if (contactUrl.trim()) form.append("contactUrl", parseSocialUrl(contactUrl)?.url || "");
       form.append("website", website);
       files.forEach((f) => form.append("images", f));
 
@@ -153,11 +157,26 @@ export default function Compose() {
           <input className="input" placeholder="จุดที่พบ/ทำหาย (ไม่บังคับ)" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={200} />
         )}
 
+        <div>
+          <div className="relative">
+            <input
+              className="input pr-10" type="text" inputMode="url" autoComplete="off" maxLength={200}
+              placeholder="ช่องทางติดต่อกลับ: ลิงก์ Instagram หรือ Facebook (ไม่บังคับ)"
+              value={contactUrl} onChange={(e) => setContactUrl(e.target.value)}
+            />
+            {parseSocialUrl(contactUrl) && (
+              <Icon name={parseSocialUrl(contactUrl).type === "INSTAGRAM" ? "instagram" : "facebook"} size={18}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 ${parseSocialUrl(contactUrl).type === "INSTAGRAM" ? "text-pink-500" : "text-blue-500"}`} />
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-300 mt-1">ลิงก์นี้จะแสดงเป็นไอคอนข้างโพสต์ ไม่แสดงข้อมูลอื่นของคุณ</p>
+        </div>
+
         {/* honeypot: คนจริงมองไม่เห็น บอทมักกรอก */}
         <input tabIndex={-1} autoComplete="off" aria-hidden="true" value={website} onChange={(e) => setWebsite(e.target.value)} className="absolute -left-[9999px] w-px h-px opacity-0" name="website" />
 
         <div>
-          <p className="text-xs font-semibold text-slate-500 mb-2">รูปภาพ (ไม่บังคับ สูงสุด {MAX_FILES} รูป)</p>
+          <p className="text-xs font-semibold text-slate-500 mb-2">รูปภาพ JPG, PNG, WebP, GIF (ไม่บังคับ สูงสุด {MAX_FILES} รูป)</p>
           {previews.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mb-2">
               {previews.map((src, i) => (
@@ -171,25 +190,21 @@ export default function Compose() {
           {files.length < MAX_FILES && (
             <button type="button" onClick={() => fileRef.current?.click()} className="btn-ghost text-sm"><Icon name="image" size={18} /> เลือกรูป</button>
           )}
-          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={pickFiles} />
+          <input ref={fileRef} type="file" accept={ACCEPT_ATTR} multiple hidden onChange={pickFiles} />
         </div>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
         <button disabled={busy} className="btn-primary w-full py-3 text-base">{busy ? "กำลังโพสต์..." : "โพสต์"}</button>
-        <p className="text-[11px] text-slate-500 dark:text-slate-300 text-center">โพสต์ที่ส่งแล้วลบเองไม่ได้ หากต้องการลบให้แจ้งแอดมิน (ปุ่ม “ติดต่อแอดมิน” มุมซ้ายล่าง)</p>
+        <p className="text-[11px] text-slate-500 dark:text-slate-300 text-center">โพสต์ที่ส่งแล้วลบเองไม่ได้ หากต้องการลบให้แจ้งแอดมิน (ปุ่ม “ติดต่อแอดมิน” มุมขวาล่าง)</p>
       </form>
 
       {confirmOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-5" onClick={() => setConfirmOpen(false)} role="dialog" aria-modal="true" aria-label="ยืนยันการส่งโพสต์">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-300 dark:border-white/20 bg-white dark:bg-[#1b2350] text-slate-900 dark:text-slate-50 shadow-2xl p-5 animate-popin" onClick={(e) => e.stopPropagation()}>
-            <div className="w-11 h-11 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 flex items-center justify-center mb-3">
-              <Icon name="flag" size={22} />
-            </div>
-            <p className="font-bold text-lg mb-1.5">ยืนยันการส่งโพสต์</p>
-            <p className="text-[15px] leading-relaxed whitespace-pre-line break-words text-slate-700 dark:text-slate-200">{site.postConfirmMessage}</p>
+          <div className="w-full max-w-sm rounded-2xl bg-white text-slate-900 shadow-2xl p-5 animate-popin" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[15px] leading-relaxed whitespace-pre-line break-words">{site.postConfirmMessage}</p>
             <div className="grid grid-cols-2 gap-2.5 mt-5">
-              <button type="button" onClick={() => setConfirmOpen(false)} className="btn-ghost !py-3">กลับไปแก้ไข</button>
-              <button type="button" onClick={send} className="btn-primary !py-3">ยืนยัน ส่งโพสต์</button>
+              <button type="button" onClick={() => setConfirmOpen(false)} className="btn !py-3 bg-red-500 hover:bg-red-600 text-white">กลับไปแก้ไข</button>
+              <button type="button" onClick={send} className="btn !py-3 bg-emerald-500 hover:bg-emerald-600 text-white">ยืนยันส่งโพสต์</button>
             </div>
           </div>
         </div>
