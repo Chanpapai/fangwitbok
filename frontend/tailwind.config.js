@@ -6,10 +6,7 @@ export default {
     extend: {
       fontFamily: { sans: ["Prompt", "Noto Sans Thai", "system-ui", "sans-serif"] },
       colors: {
-        brand: {
-          50: "#f0f5ff", 100: "#e0ebff", 200: "#c7d6fe", 300: "#a5b8fc",
-          400: "#60a5fa", 500: "#6d5df6", 600: "#5847e0", 700: "#4638b8",
-        },
+        brand: Object.fromEntries([50, 100, 200, 300, 400, 500, 600, 700].map((n) => [n, `rgb(var(--brand-${n}) / <alpha-value>)`])), // สีธีมเปลี่ยนได้ในหน้าตั้งค่า (ตัวแปรอยู่ใน index.css)
         ink: { 900: "#080b18", 800: "#0d1226", 700: "#141a33", 600: "#1c2444" },
       },
     },

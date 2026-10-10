@@ -6,13 +6,19 @@ import { useSite } from "../context/SiteContext";
 import { ACCEPT_ATTR, MAX_BYTES, TYPE_ERROR, isAllowedImage, shrinkImage } from "../lib/image";
 import { parseSocialUrl } from "../lib/contact";
 import Icon from "../components/Icon";
+import EmojiPicker, { EmojiToggle, insertEmoji } from "../components/EmojiPicker";
+import { useProfile } from "../context/ProfileContext";
 
 const MAX_FILES = 5;
 
 export default function Compose() {
   const navigate = useNavigate();
   const { site } = useSite();
+  const { profile } = useProfile();
   const fileRef = useRef(null);
+  const contentBox = useRef(null);
+  const contactTouched = useRef(false);
+  const [emoji, setEmoji] = useState(false);
   const [identity, setIdentity] = useState(null); // null = ยังไม่เลือก | "named" | "anon"
   const [type, setType] = useState("ANNOUNCE");
   const [content, setContent] = useState("");
@@ -32,6 +38,11 @@ export default function Compose() {
     if (p.name) setName(p.name);
     if (p.className) setClassName(p.className);
   }, []);
+
+  // เติมลิงก์จากโปรไฟล์ให้ครั้งเดียว (ผู้ใช้แก้/ลบได้ และจะแนบกับโพสต์ก็ต่อเมื่อกดส่งโพสต์เอง)
+  useEffect(() => {
+    if (!contactTouched.current && !contactUrl) setContactUrl(profile.instagramUrl || profile.facebookUrl || "");
+  }, [profile.instagramUrl, profile.facebookUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
 
@@ -149,9 +160,13 @@ export default function Compose() {
           </div>
         )}
 
-        <textarea className="input" rows={5} maxLength={2000} value={content} onChange={(e) => setContent(e.target.value)}
+        <textarea ref={contentBox} className="input" rows={5} maxLength={2000} value={content} onChange={(e) => setContent(e.target.value)}
           placeholder={type === "LOST_FOUND" ? "อธิบายของที่หาย/เจอ ลักษณะ เวลา..." : "อยากฝากบอกอะไร..."} />
-        <span className="text-xs text-slate-400 text-right -mt-2">{content.length}/2000</span>
+        <div className="flex items-center justify-between -mt-2">
+          <EmojiToggle open={emoji} onClick={() => setEmoji((v) => !v)} />
+          <span className="text-xs text-slate-500 dark:text-slate-300">{content.length}/2000</span>
+        </div>
+        {emoji && <EmojiPicker onPick={(em) => insertEmoji(contentBox.current, content, em, setContent)} />}
 
         {type === "LOST_FOUND" && (
           <input className="input" placeholder="จุดที่พบ/ทำหาย (ไม่บังคับ)" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={200} />
@@ -162,7 +177,7 @@ export default function Compose() {
             <input
               className="input pr-10" type="text" inputMode="url" autoComplete="off" maxLength={200}
               placeholder="ช่องทางติดต่อกลับ: ลิงก์ Instagram หรือ Facebook (ไม่บังคับ)"
-              value={contactUrl} onChange={(e) => setContactUrl(e.target.value)}
+              value={contactUrl} onChange={(e) => { contactTouched.current = true; setContactUrl(e.target.value); }}
             />
             {parseSocialUrl(contactUrl) && (
               <Icon name={parseSocialUrl(contactUrl).type === "INSTAGRAM" ? "instagram" : "facebook"} size={18}

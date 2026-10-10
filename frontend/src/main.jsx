@@ -5,6 +5,7 @@ import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { SiteProvider } from "./context/SiteContext";
+import { ProfileProvider } from "./context/ProfileContext";
 import { DialogProvider } from "./components/DialogProvider";
 import "./index.css";
 
@@ -15,7 +16,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <SiteProvider>
           <AuthProvider>
             <DialogProvider>
-              <App />
+              <ProfileProvider>
+                <App />
+              </ProfileProvider>
             </DialogProvider>
           </AuthProvider>
         </SiteProvider>

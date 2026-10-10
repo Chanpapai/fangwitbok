@@ -12,6 +12,7 @@ import PostDetail from "./pages/PostDetail";
 import Compose from "./pages/Compose";
 import Rules from "./pages/Rules";
 import StaffLogin from "./pages/StaffLogin";
+import Settings from "./pages/Settings";
 
 // หลังบ้านโหลดแยกเมื่อเข้าใช้งานจริง — ผู้เข้าชมทั่วไปไม่ต้องดาวน์โหลดโค้ด Admin (เปิดเว็บเร็วขึ้น)
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/post/:id" element={<PostDetail />} />
         <Route path="/rules" element={<Rules />} />
         <Route path="/staff" element={<StaffLogin />} />
+        <Route path="/settings" element={<Settings />} />
 
         <Route element={<AdminRoute />}>
           <Route path="/admin" element={<AdminLayout />}>

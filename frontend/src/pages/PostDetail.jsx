@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -6,6 +6,7 @@ import { getOwnerToken, setOwnerToken, dropOwnerToken, getSavedProfile, saveProf
 import PostCard, { AuthorLine } from "../components/PostCard";
 import Icon from "../components/Icon";
 import { useDialog } from "../components/DialogProvider";
+import EmojiPicker, { EmojiToggle, insertEmoji } from "../components/EmojiPicker";
 
 export default function PostDetail() {
   const { confirm, notify } = useDialog();
@@ -16,6 +17,8 @@ export default function PostDetail() {
   const [comments, setComments] = useState([]);
   const [error, setError] = useState("");
   const [text, setText] = useState("");
+  const [emoji, setEmoji] = useState(false);
+  const commentBox = useRef(null);
   const [anon, setAnon] = useState(true);
   const [name, setName] = useState("");
   const [className, setClassName] = useState("");
@@ -47,6 +50,7 @@ export default function PostDetail() {
       setComments((prev) => [...prev, data.comment]);
       setPost((p) => ({ ...p, commentCount: p.commentCount + 1 }));
       setText("");
+      setEmoji(false);
     } catch (err) {
       notify(err.message);
     } finally {
@@ -115,8 +119,10 @@ export default function PostDetail() {
               <input className="input col-span-2" placeholder="ชั้น/ห้อง" value={className} onChange={(e) => setClassName(e.target.value)} maxLength={30} />
             </div>
           )}
+          {emoji && <EmojiPicker onPick={(em) => insertEmoji(commentBox.current, text, em, setText)} />}
           <div className="flex items-end gap-2">
-            <textarea className="input resize-none" rows={2} placeholder="แสดงความคิดเห็น..." value={text} onChange={(e) => setText(e.target.value)} maxLength={500} />
+            <EmojiToggle open={emoji} onClick={() => setEmoji((v) => !v)} />
+            <textarea ref={commentBox} className="input resize-none" rows={2} placeholder="แสดงความคิดเห็น..." aria-label="แสดงความคิดเห็น" value={text} onChange={(e) => setText(e.target.value)} maxLength={500} />
             <button disabled={busy || !text.trim()} className="btn-primary !p-3" aria-label="ส่งความคิดเห็น"><Icon name="send" size={18} /></button>
           </div>
         </form>

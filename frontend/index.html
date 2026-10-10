@@ -17,7 +17,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <title>FangwitBok V2 — ฝากวิทฝากบอก</title>
   <script>
-    try { if (localStorage.getItem("fwb_theme") === "light") document.documentElement.classList.remove("dark"); } catch (e) {}
+    try {
+      var d = document.documentElement;
+      if (localStorage.getItem("fwb_theme") === "light") d.classList.remove("dark");
+      var a = localStorage.getItem("fwb_accent");
+      if (a && /^[a-z]{3,10}$/.test(a)) d.setAttribute("data-accent", a);
+    } catch (e) {}
   </script>
 </head>
 <body class="bg-slate-50 dark:bg-[#080b18] text-slate-800 dark:text-slate-100 antialiased">

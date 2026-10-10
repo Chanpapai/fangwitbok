@@ -2,6 +2,7 @@
 // ถ้าเบราว์เซอร์ย่อไม่ได้จะคืนไฟล์เดิม (Backend ยังตรวจ "ไฟล์จริง" และย่อซ้ำอีกชั้น)
 export const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 export const ACCEPT_ATTR = "image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif";
+export const ACCEPT = ACCEPT_ATTR; // ชื่อสั้น (ใช้ในหน้าตั้งค่า)
 export const TYPE_ERROR = "รองรับเฉพาะไฟล์ JPG, PNG, WebP, GIF เท่านั้น";
 export const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -29,4 +30,21 @@ export async function shrinkImage(file, maxSide = 1600, quality = 0.85) {
   } catch {
     return file;
   }
+}
+
+/** รูปโปรไฟล์: ตัดเป็นสี่เหลี่ยมจัตุรัสตรงกลาง แล้วย่อ (GIF ใช้เฟรมแรก) — คืน { blob, dataUrl } (throw ข้อความไทยถ้าอ่านรูปไม่ได้) */
+export async function makeAvatar(file, size = 256) {
+  if (!isAllowedImage(file)) throw new Error(TYPE_ERROR);
+  if (file.size > MAX_BYTES * 2) throw new Error("ไฟล์ใหญ่เกินไป");
+  let bmp;
+  try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); } catch { throw new Error("อ่านรูปนี้ไม่ได้ ลองเลือกรูปอื่น"); }
+  const side = Math.min(bmp.width, bmp.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  canvas.getContext("2d").drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+  bmp.close?.();
+  const blob = await new Promise((r) => canvas.toBlob(r, "image/webp", 0.85));
+  if (!blob) throw new Error("ย่อรูปไม่สำเร็จ");
+  const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+  return { blob, dataUrl };
 }

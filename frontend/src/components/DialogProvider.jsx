@@ -37,7 +37,8 @@ export function DialogProvider({ children }) {
     return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [dlg, close]);
 
-  const value = useMemo(() => ({ confirm, notify }), [confirm, notify]);
+  // toast(message, "error"|"success"|"info") = ชื่อเรียกอีกแบบของ notify (ใช้ในหน้าตั้งค่า/แชท) — "info" แสดงเป็นแถบเขียวเหมือน success
+  const value = useMemo(() => ({ confirm, notify, toast: notify }), [confirm, notify]);
   const danger = dlg?.tone === "danger";
 
   return (
@@ -74,8 +75,8 @@ export function DialogProvider({ children }) {
 
       {toast && (
         <div key={toast.id} className="fixed inset-x-0 bottom-24 z-[90] flex justify-center px-4 pointer-events-none" role="status" aria-live="polite">
-          <div className={`pointer-events-auto max-w-sm w-full flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-xl animate-popin ${toast.tone === "success" ? "bg-emerald-600" : "bg-red-600"}`}>
-            <Icon name={toast.tone === "success" ? "check" : "flag"} size={18} className="mt-0.5" />
+          <div className={`pointer-events-auto max-w-sm w-full flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-xl animate-popin ${toast.tone === "success" || toast.tone === "info" ? "bg-emerald-600" : "bg-red-600"}`}>
+            <Icon name={toast.tone === "success" || toast.tone === "info" ? "check" : "flag"} size={18} className="mt-0.5" />
             <span className="flex-1 break-words">{toast.message}</span>
             <button type="button" onClick={() => setToast(null)} aria-label="ปิด" className="opacity-80 hover:opacity-100"><Icon name="close" size={16} /></button>
           </div>
@@ -90,3 +91,5 @@ export function useDialog() {
   if (!ctx) throw new Error("useDialog ต้องใช้ภายใน DialogProvider");
   return ctx;
 }
+
+export const useDialogs = useDialog; // ชื่อเดิมที่หน้าตั้งค่า/แชทใช้

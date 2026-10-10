@@ -13,7 +13,22 @@ const router = express.Router();
 const msgSchema = z.object({ body: z.string().trim().min(1, "กรุณาพิมพ์ข้อความ").max(1000) });
 const createSchema = msgSchema; // ไม่มีช่อง "ติดต่อกลับ" แล้ว — ผู้เข้าชมคุยกับแอดมินผ่านห้องแชทนี้โดยตรง
 
-const serializeMsg = (m) => ({ id: m.id, sender: m.sender, adminName: m.adminName, body: m.body, createdAt: m.createdAt });
+// unread = ข้อความของ "อีกฝ่าย" ที่ผู้ดูยังไม่ได้เห็น (viewer: VISITOR หรือ ADMIN) — หน้าเว็บใช้คำนวณปุ่มกระดิ่ง
+const serializeMsg = (m, viewer) => ({
+  id: m.id, sender: m.sender, adminName: m.adminName, body: m.body, createdAt: m.createdAt,
+  unread: viewer ? m.sender !== viewer && !m.isRead : false,
+});
+
+const readSchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(100) });
+
+// ทำเครื่องหมาย "อ่านแล้ว" เฉพาะข้อความของอีกฝ่ายในห้องนี้ แล้วคำนวณตัวนับค้างอ่านใหม่จากข้อมูลจริง (ไม่เดาด้วยการ +/-)
+async function markRead(thread, viewer, ids) {
+  const other = viewer === "VISITOR" ? "ADMIN" : "VISITOR";
+  await prisma.supportMessage.updateMany({ where: { threadId: thread.id, sender: other, isRead: false, id: { in: ids } }, data: { isRead: true } });
+  const unread = await prisma.supportMessage.count({ where: { threadId: thread.id, sender: other, isRead: false } });
+  await prisma.supportThread.update({ where: { id: thread.id }, data: viewer === "VISITOR" ? { unreadForVisitor: unread } : { unreadForAdmin: unread } });
+  return unread;
+}
 
 /** หาห้องแชทจากโทเคนในเครื่องผู้เข้าชม (DB เก็บแค่ hash) */
 async function threadFromToken(req) {
@@ -31,7 +46,7 @@ router.post("/support/threads", supportCreateLimiter, validateBody(createSchema)
       tokenHash: secret.hash,
       ipHash: hashIp(req.ip),
       unreadForAdmin: 1,
-      messages: { create: { sender: "VISITOR", body } },
+      messages: { create: { sender: "VISITOR", body, isRead: false } },
     },
     include: { messages: true },
   });
@@ -39,7 +54,7 @@ router.post("/support/threads", supportCreateLimiter, validateBody(createSchema)
     type: "SUPPORT_MESSAGE", title: "มีข้อความแจ้งปัญหาใหม่", body: body.slice(0, 100),
     relatedType: "SUPPORT", relatedId: thread.id,
   }).catch((e) => console.error("[notify]", e.message));
-  res.status(201).json({ threadToken: secret.token, status: thread.status, messages: thread.messages.map(serializeMsg) });
+  res.status(201).json({ threadToken: secret.token, status: thread.status, messages: thread.messages.map((m) => serializeMsg(m, "VISITOR")) });
 });
 
 // GET /api/support/thread — ผู้เข้าชมดูแชทของตัวเอง (หน้าเว็บ poll ทุก ~10 วินาทีตอนเปิดแชท)
@@ -49,10 +64,20 @@ router.get("/support/thread", async (req, res) => {
   const messages = await prisma.supportMessage.findMany({
     where: { threadId: thread.id }, orderBy: { createdAt: "asc" }, take: 200,
   });
-  if (thread.unreadForVisitor > 0) {
-    await prisma.supportThread.update({ where: { id: thread.id }, data: { unreadForVisitor: 0 } });
+  // ไม่ล้างตัวนับตอนดึงข้อมูล: ถือว่า "อ่านแล้ว" ก็ต่อเมื่อหน้าเว็บแจ้งว่าข้อความนั้นถูกเลื่อนมาเห็นจริง (POST /support/read)
+  // ตัวนับคำนวณใหม่จากข้อความจริงทุกครั้ง (กันค่าค้างจากแชทเก่าก่อนมีสถานะอ่าน)
+  const unread = messages.filter((m) => m.sender === "ADMIN" && !m.isRead).length;
+  if (unread !== thread.unreadForVisitor) {
+    await prisma.supportThread.update({ where: { id: thread.id }, data: { unreadForVisitor: unread } });
   }
-  res.json({ status: thread.status, unread: thread.unreadForVisitor, messages: messages.map(serializeMsg) });
+  res.json({ status: thread.status, unread, messages: messages.map((m) => serializeMsg(m, "VISITOR")) });
+});
+
+// POST /api/support/read — ผู้เข้าชมแจ้งว่าเห็นข้อความของแอดมินเหล่านี้แล้ว
+router.post("/support/read", validateBody(readSchema), async (req, res) => {
+  const thread = await threadFromToken(req);
+  if (!thread) return res.status(404).json({ error: "ไม่พบห้องแชท" });
+  res.json({ unread: await markRead(thread, "VISITOR", req.body.ids) });
 });
 
 // GET /api/support/unread — เช็คจำนวนข้อความใหม่แบบเบา ๆ (ไม่ดึงข้อความ)
@@ -66,7 +91,7 @@ router.post("/support/messages", supportMessageLimiter, validateBody(msgSchema),
   const thread = await threadFromToken(req);
   if (!thread) return res.status(404).json({ error: "ไม่พบห้องแชท" });
   const body = sanitizeText(req.body.body);
-  const m = await prisma.supportMessage.create({ data: { threadId: thread.id, sender: "VISITOR", body } });
+  const m = await prisma.supportMessage.create({ data: { threadId: thread.id, sender: "VISITOR", body, isRead: false } });
   await prisma.supportThread.update({
     where: { id: thread.id },
     data: { status: "OPEN", unreadForAdmin: { increment: 1 }, lastMessageAt: new Date() },
@@ -77,7 +102,7 @@ router.post("/support/messages", supportMessageLimiter, validateBody(msgSchema),
       relatedType: "SUPPORT", relatedId: thread.id,
     }).catch(() => {});
   }
-  res.status(201).json({ message: serializeMsg(m) });
+  res.status(201).json({ message: serializeMsg(m, "VISITOR") });
 });
 
 // ---------------- Admin ----------------
@@ -108,20 +133,28 @@ router.get("/admin/support/:id", ...staff, async (req, res) => {
   const thread = await prisma.supportThread.findUnique({ where: { id: req.params.id } });
   if (!thread) return res.status(404).json({ error: "ไม่พบห้องแชท" });
   const messages = await prisma.supportMessage.findMany({ where: { threadId: thread.id }, orderBy: { createdAt: "asc" }, take: 300 });
-  if (thread.unreadForAdmin > 0) await prisma.supportThread.update({ where: { id: thread.id }, data: { unreadForAdmin: 0 } });
-  res.json({ thread: { id: thread.id, contact: thread.contact, status: thread.status }, messages: messages.map(serializeMsg) });
+  // ไม่ล้างตัวนับตอนเปิดดู: นับเป็นอ่านแล้วเมื่อข้อความถูกเลื่อนมาเห็นจริง (POST /admin/support/:id/read)
+  const unread = messages.filter((m) => m.sender === "VISITOR" && !m.isRead).length;
+  if (unread !== thread.unreadForAdmin) await prisma.supportThread.update({ where: { id: thread.id }, data: { unreadForAdmin: unread } });
+  res.json({ thread: { id: thread.id, contact: thread.contact, status: thread.status }, messages: messages.map((m) => serializeMsg(m, "ADMIN")) });
+});
+
+router.post("/admin/support/:id/read", ...staff, validateBody(readSchema), async (req, res) => {
+  const thread = await prisma.supportThread.findUnique({ where: { id: req.params.id } });
+  if (!thread) return res.status(404).json({ error: "ไม่พบห้องแชท" });
+  res.json({ unread: await markRead(thread, "ADMIN", req.body.ids) });
 });
 
 router.post("/admin/support/:id/reply", ...staff, writeLimiter, validateBody(msgSchema), async (req, res) => {
   const thread = await prisma.supportThread.findUnique({ where: { id: req.params.id } });
   if (!thread) return res.status(404).json({ error: "ไม่พบห้องแชท" });
   const m = await prisma.supportMessage.create({
-    data: { threadId: thread.id, sender: "ADMIN", adminName: req.user.displayName, body: sanitizeText(req.body.body) },
+    data: { threadId: thread.id, sender: "ADMIN", adminName: req.user.displayName, body: sanitizeText(req.body.body), isRead: false },
   });
   await prisma.supportThread.update({
-    where: { id: thread.id }, data: { unreadForVisitor: { increment: 1 }, unreadForAdmin: 0, lastMessageAt: new Date() },
+    where: { id: thread.id }, data: { unreadForVisitor: { increment: 1 }, lastMessageAt: new Date() },
   });
-  res.status(201).json({ message: serializeMsg(m) });
+  res.status(201).json({ message: serializeMsg(m, "ADMIN") });
 });
 
 router.patch("/admin/support/:id", ...staff, validateBody(z.object({ status: z.enum(["OPEN", "CLOSED"]) })), async (req, res) => {
