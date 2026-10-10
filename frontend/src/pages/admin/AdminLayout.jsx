@@ -73,7 +73,7 @@ export default function AdminLayout() {
               return (
                 <NavLink
                   key={t.to} to={t.to} end={t.end}
-                  className={({ isActive }) => `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition ${isActive ? "bg-brand-600 text-white shadow shadow-brand-600/25" : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.07]"}`}
+                  className={({ isActive }) => `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition ${isActive ? "bg-gradient-to-r from-brand-400 to-brand-500 text-white shadow shadow-brand-500/25" : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.07]"}`}
                 >
                   <Icon name={t.icon} size={18} />
                   <span className="flex-1">{t.label}</span>

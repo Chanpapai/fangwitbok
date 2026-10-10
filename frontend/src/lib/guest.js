@@ -50,15 +50,9 @@ export const clearThreadToken = () => remove("fwb_thread");
 export function getSavedProfile() {
   try { return JSON.parse(read("fwb_profile") || "{}"); } catch { return {}; }
 }
-// รวมกับข้อมูลเดิมเสมอ (ไม่ทับลิงก์/รูปโปรไฟล์ที่เคยบันทึกไว้)
-export function patchProfile(patch) {
-  write("fwb_profile", JSON.stringify({ ...getSavedProfile(), ...patch }));
-}
-export const saveProfile = (name, className) => patchProfile({ name, className });
+export const saveProfile = (name, className) => write("fwb_profile", JSON.stringify({ name, className }));
 
 export const getStaffFlag = () => read("fwb_staff") === "1";
 export const setStaffFlag = (on) => (on ? write("fwb_staff", "1") : remove("fwb_staff"));
 
 export const setTheme = (t) => write("fwb_theme", t);
-export const getAccent = () => read("fwb_accent");
-export const setAccent = (a) => write("fwb_accent", a);

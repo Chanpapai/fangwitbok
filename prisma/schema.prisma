@@ -66,9 +66,7 @@ model User {
   studentCode  String   @unique // รหัสนักเรียน/อีเมลโรงเรียน — ใช้ล็อกอิน
   passwordHash String
   displayName  String
-  avatarUrl    String? // path รูปโปรไฟล์ใน Supabase Storage (โฟลเดอร์ avatars) — ผู้ใช้อัปโหลดเอง ไม่ดึงจาก IG/FB
-  instagramUrl String? // ลิงก์โปรไฟล์ที่ผู้ใช้ใส่เอง (ผ่าน validation) — เป็นส่วนตัว ไม่ถูกเปิดเผยใน API สาธารณะ
-  facebookUrl  String?
+  avatarUrl    String?
   role         Role     @default(USER)
   isBanned     Boolean  @default(false)
   bannedReason String?
@@ -120,8 +118,8 @@ model Post {
   ipHash      String? // hash ของ IP ให้ Admin ตรวจสแปม ไม่เปิดเผยสู่สาธารณะ
   content     String
   location    String? // จุดที่พบ/ทำหาย (สำหรับตามหาของหาย)
-  contactType String? // ช่องทางติดต่อกลับที่ผู้โพสต์เลือกใส่เอง: INSTAGRAM | FACEBOOK (ไม่บังคับ)
-  contactUrl  String? // ลิงก์ที่ผ่านการตรวจ (https + โดเมน allowlist) เปิดเผยเฉพาะลิงก์นี้เท่านั้น
+  contactUrl  String? // ลิงก์ติดต่อกลับ (Instagram/Facebook) ที่ผู้โพสต์เลือกใส่เอง — ผ่านการตรวจ URL แล้ว
+  contactType String? // "INSTAGRAM" | "FACEBOOK"
 
   // Soft delete / Trash: ลบแล้วย้ายมาที่นี่ก่อน ลบถาวรอัตโนมัติเมื่อเกิน 15 วัน
   deletedAt   DateTime?
@@ -136,8 +134,8 @@ model Post {
   reports  Report[]
 
   @@index([type, deletedAt])
-  @@index([deletedAt, createdAt]) // ฟีด: where deletedAt is null order by createdAt desc
   @@index([deletedAt]) // ใช้สำหรับ job ลบถาวรอัตโนมัติ (deletedAt < now-15d)
+  @@index([deletedAt, createdAt]) // หน้า Feed: กรองโพสต์ที่ไม่ถูกลบ + เรียงใหม่ไปเก่า
 }
 
 model PostImage {
@@ -249,10 +247,9 @@ model RoleChangeLog {
 // ============================================================
 model Popup {
   id          String    @id @default(uuid())
-  title       String @default("") // ไม่บังคับ (ว่างได้)
-  body        String @default("") // ไม่บังคับ (ว่างได้)
-  imageUrl    String? // รูปแรก (คงไว้เพื่อข้อมูลเดิม/ย้อนกลับได้)
-  images      String[]  @default([]) // path รูปทั้งหมดใน Supabase Storage เรียงตามลำดับ (หลายรูปได้)
+  title       String    @default("") // ไม่บังคับ (Popup ที่มีแต่รูปได้)
+  body        String    @default("") // ไม่บังคับ
+  imageUrl    String? // เลิกใช้ (รูปเดี่ยวแบบเก่า) — อ่านเป็นรูปแรกถ้ายังไม่มีแถวใน PopupImage
   order       Int       @default(0)
   isActive    Boolean   @default(true)
   startAt     DateTime?
@@ -261,7 +258,29 @@ model Popup {
   createdBy   User      @relation(fields: [createdById], references: [id])
   createdAt   DateTime  @default(now())
 
+  images PopupImage[]
+
   @@index([isActive, order])
+}
+
+// รูปของ Popup (หลายรูปต่อ 1 Popup) เก็บ path ใน Supabase Storage
+model PopupImage {
+  id       String @id @default(uuid())
+  popupId  String
+  popup    Popup  @relation(fields: [popupId], references: [id], onDelete: Cascade)
+  url      String
+  position Int    @default(0)
+
+  @@index([popupId, position])
+}
+
+// ช่องทางการติดต่อบนหน้าแรก (Admin จัดการ): key = instagram | facebook | discord
+model ContactChannel {
+  key         String   @id
+  url         String   @default("")
+  enabled     Boolean  @default(false)
+  updatedById String?
+  updatedAt   DateTime @updatedAt
 }
 
 // ============================================================
@@ -324,7 +343,6 @@ model SupportMessage {
   sender    SupportSender
   adminName String?
   body      String
-  isRead    Boolean       @default(true) // false = อีกฝ่ายยังไม่ได้เห็นข้อความนี้ (ข้อความเดิมก่อนอัปเดตถือว่าอ่านแล้ว)
   createdAt DateTime      @default(now())
 
   @@index([threadId, createdAt])
@@ -332,7 +350,7 @@ model SupportMessage {
 
 // ============================================================
 // ตั้งค่าหน้าเว็บไซต์ (Super Admin แก้ได้จากหลังบ้าน ไม่ต้องแก้โค้ด)
-// key: homeHeadline | postConfirmMessage | logoPath | profilePath | contact_instagram | contact_facebook | contact_discord (JSON {url,active})
+// key: homeHeadline | postConfirmMessage | logoPath | profilePath
 // รูปเก็บใน Supabase Storage (ถาวร) ที่นี่เก็บแค่ path
 // ============================================================
 model SiteSetting {

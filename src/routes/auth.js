@@ -25,13 +25,11 @@ const cookieOpts = {
   path: "/api/auth", // แนบ cookie นี้เฉพาะ path ของ auth เท่านั้น ลดพื้นผิวการโจมตี
 };
 
-// ทีมงานเข้าสู่ระบบด้วย "ชื่อจริง" (displayName) + รหัสผ่าน — ไม่มีรหัสผู้ดูแลแยกอีกต่อไป
+// ทีมงานเข้าสู่ระบบด้วย "ชื่อจริง" (ชื่อที่แสดง) + รหัสผ่าน
 const loginSchema = z.object({
   name: z.string().trim().min(1).max(50),
   password: z.string().min(1).max(72),
 });
-// hash หลอกไว้เทียบเวลา: ไม่ว่าชื่อจะมีอยู่จริงหรือไม่ ใช้เวลาตรวจรหัสใกล้เคียงกัน (กันเดาชื่อทีมงานจากเวลาตอบ)
-const dummyHash = hashPassword("fwb-dummy-password-0");
 
 async function issueSession(res, user, userAgent) {
   const accessToken = signAccessToken(user);
@@ -49,7 +47,7 @@ function publicUser(user) {
   return {
     id: user.id,
     displayName: user.displayName,
-    avatarUrl: require("../config/storage").publicUrl(user.avatarUrl),
+    avatarUrl: user.avatarUrl,
     role: user.role,
   };
 }
@@ -57,19 +55,15 @@ function publicUser(user) {
 // POST /api/auth/login
 router.post("/login", authLimiter, validateBody(loginSchema), async (req, res) => {
   const { name, password } = req.body;
+  // ผู้เข้าชมทั่วไปไม่ต้อง Login — ช่องทางนี้ใช้ได้เฉพาะทีมผู้ดูแล (ADMIN / SUPER_ADMIN)
+  const candidates = await prisma.user.findMany({
+    where: { displayName: { equals: name, mode: "insensitive" }, role: { in: ["ADMIN", "SUPER_ADMIN"] } },
+    take: 5,
+  });
 
-  // ข้อความ error เหมือนกันทุกกรณี (ไม่พบชื่อ/รหัสผิด/ไม่ใช่ทีมงาน) กันคนสแกนหาชื่อทีมงานที่มีอยู่จริง
+  // ข้อความ error เหมือนกันทั้งกรณี "ไม่พบชื่อ" และ "รหัสผิด" กันคนสแกนหาชื่อทีมงานที่มีอยู่จริง
   const genericError = () => res.status(401).json({ error: "ชื่อหรือรหัสผ่านไม่ถูกต้อง" });
 
-  // เฉพาะทีมงาน (ผู้เข้าชมทั่วไปไม่ต้อง Login) — ชื่อทีมงานห้ามซ้ำกัน (ตรวจตอนเพิ่ม/แต่งตั้ง)
-  const candidates = await prisma.user.findMany({
-    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, displayName: { equals: name, mode: "insensitive" } },
-    take: 3,
-  });
-  if (candidates.length === 0) {
-    await verifyPassword(password, await dummyHash);
-    return genericError();
-  }
   let user = null;
   for (const c of candidates) {
     if (await verifyPassword(password, c.passwordHash)) { user = c; break; }

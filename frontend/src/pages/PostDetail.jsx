@@ -1,20 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { getOwnerToken, setOwnerToken, dropOwnerToken, getSavedProfile, saveProfile } from "../lib/guest";
 import PostCard, { AuthorLine } from "../components/PostCard";
 import Icon from "../components/Icon";
-import { useDialogs } from "../components/Dialogs";
-import EmojiPicker, { EmojiToggle, insertEmoji } from "../components/EmojiPicker";
+import { useDialog } from "../components/DialogProvider";
 
 export default function PostDetail() {
+  const { confirm, notify } = useDialog();
   const { id } = useParams();
   const navigate = useNavigate();
   const { isStaff } = useAuth();
-  const { confirm, toast } = useDialogs();
-  const [emoji, setEmoji] = useState(false);
-  const commentBox = useRef(null);
   const [post, setPost] = useState(null);
   const [comments, setComments] = useState([]);
   const [error, setError] = useState("");
@@ -39,7 +36,7 @@ export default function PostDetail() {
   async function submitComment(e) {
     e.preventDefault();
     if (!text.trim()) return;
-    if (!anon && !name.trim()) return toast("กรุณากรอกชื่อ หรือเลือกไม่ระบุตัวตน", "error");
+    if (!anon && !name.trim()) return notify("กรุณากรอกชื่อ หรือเลือกไม่ระบุตัวตน");
     setBusy(true);
     try {
       const data = await api.post(`/api/posts/${id}/comments`, {
@@ -50,16 +47,15 @@ export default function PostDetail() {
       setComments((prev) => [...prev, data.comment]);
       setPost((p) => ({ ...p, commentCount: p.commentCount + 1 }));
       setText("");
-      setEmoji(false);
     } catch (err) {
-      toast(err.message, "error");
+      notify(err.message);
     } finally {
       setBusy(false);
     }
   }
 
   async function removeComment(commentId) {
-    const ok = await confirm({ title: "ลบความคิดเห็นนี้?", message: "ความคิดเห็นจะถูกลบออกจากโพสต์", confirmText: "ลบความคิดเห็น", tone: "danger", icon: "trash" });
+    const ok = await confirm({ title: "ลบความคิดเห็นนี้ใช่ไหม?", message: "ความคิดเห็นจะถูกลบออกจากโพสต์", confirmText: "ลบความคิดเห็น", tone: "danger" });
     if (!ok) return;
     const token = getOwnerToken("comment", commentId);
     try {
@@ -67,7 +63,7 @@ export default function PostDetail() {
       dropOwnerToken("comment", commentId);
       setComments((prev) => prev.filter((c) => c.id !== commentId));
     } catch (err) {
-      toast(err.message, "error");
+      notify(err.message);
     }
   }
 
@@ -81,25 +77,25 @@ export default function PostDetail() {
 
   return (
     <div className="relative z-10 max-w-xl mx-auto px-4 py-4 pb-28">
-      <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/feed"))} className="text-sm text-slate-600 dark:text-slate-300 mb-3 flex items-center gap-1">
+      <button onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/feed"))} className="text-sm text-slate-500 mb-3 flex items-center gap-1">
         <Icon name="left" size={16} /> กลับ
       </button>
 
-      <PostCard post={post} detailed onChanged={(_id, u) => (u === null ? navigate("/feed", { replace: true }) : setPost(u))} />
+      <PostCard post={post} detailed onChanged={(u) => (u === null ? navigate("/feed", { replace: true }) : setPost(u))} />
 
       <div className="card-post p-4 pt-5 mt-3">
         <p className="font-bold mb-3 flex items-center gap-2"><Icon name="chat" size={18} /> ความคิดเห็น ({comments.length})</p>
 
         <div className="flex flex-col gap-3">
           {comments.map((c) => (
-            <div key={c.id} className="bg-slate-100 rounded-[18px] px-3.5 py-2.5">
+            <div key={c.id} className="bg-slate-100 dark:bg-white/[0.09] rounded-2xl px-3.5 py-2.5">
               <div className="flex items-start gap-2">
                 <AuthorLine author={c.author} createdAt={c.createdAt} />
                 {(getOwnerToken("comment", c.id) || isStaff) && (
-                  <button onClick={() => removeComment(c.id)} className="text-slate-600 dark:text-slate-300 hover:text-red-600 p-1" aria-label="ลบคอมเมนต์"><Icon name="trash" size={15} /></button>
+                  <button onClick={() => removeComment(c.id)} className="text-slate-400 hover:text-red-500 p-1" aria-label="ลบคอมเมนต์"><Icon name="trash" size={15} /></button>
                 )}
               </div>
-              <p className="text-[16px] leading-[1.6] font-medium text-slate-950 whitespace-pre-line break-words mt-1">{c.content}</p>
+              <p className="text-sm whitespace-pre-line break-words mt-1">{c.content}</p>
             </div>
           ))}
           {comments.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-300 text-center py-2">ยังไม่มีความคิดเห็น</p>}
@@ -119,10 +115,8 @@ export default function PostDetail() {
               <input className="input col-span-2" placeholder="ชั้น/ห้อง" value={className} onChange={(e) => setClassName(e.target.value)} maxLength={30} />
             </div>
           )}
-          {emoji && <EmojiPicker onPick={(em) => insertEmoji(commentBox.current, text, em, setText)} />}
           <div className="flex items-end gap-2">
-            <EmojiToggle open={emoji} onClick={() => setEmoji((v) => !v)} />
-            <textarea ref={commentBox} className="input resize-none" rows={2} placeholder="แสดงความคิดเห็น..." aria-label="แสดงความคิดเห็น" value={text} onChange={(e) => setText(e.target.value)} maxLength={500} />
+            <textarea className="input resize-none" rows={2} placeholder="แสดงความคิดเห็น..." value={text} onChange={(e) => setText(e.target.value)} maxLength={500} />
             <button disabled={busy || !text.trim()} className="btn-primary !p-3" aria-label="ส่งความคิดเห็น"><Icon name="send" size={18} /></button>
           </div>
         </form>

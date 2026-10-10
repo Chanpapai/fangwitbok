@@ -1,24 +1,19 @@
-// เตรียมรูปบนเครื่องผู้ใช้ก่อนอัปโหลด: รองรับ JPG, PNG, WebP, GIF
-// - รูปจากมือถือมักใหญ่เกิน 5MB: ย่อ (JPG/PNG/WebP) เป็น WebP ก่อนส่ง ประหยัด Bandwidth ของ Free Tier
-// - GIF ส่งไฟล์เดิม (ไม่ย่อบนเครื่อง เพราะ canvas จะเก็บแค่เฟรมแรก ทำให้อนิเมชันหาย) แล้วให้ Backend แปลงเป็น WebP เคลื่อนไหวให้
-// - บางเครื่อง/เบราว์เซอร์ส่ง type ว่าง หรือ image/jpg จึงตรวจจากนามสกุลสำรอง และตั้ง type ให้ถูกก่อนส่ง
-// ถ้าเบราว์เซอร์ย่อไม่ได้จะคืนไฟล์เดิม (Backend ตรวจไบต์จริงและย่อซ้ำอีกชั้น)
+// ย่อรูปบนเครื่องผู้ใช้ก่อนอัปโหลด: รูปจากมือถือมักใหญ่เกิน 5MB และเปลือง Bandwidth ของ Free Tier
+// ถ้าเบราว์เซอร์ย่อไม่ได้จะคืนไฟล์เดิม (Backend ยังตรวจ "ไฟล์จริง" และย่อซ้ำอีกชั้น)
 export const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-export const ACCEPT = ALLOWED_TYPES.join(",");
+export const ACCEPT_ATTR = "image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif";
+export const TYPE_ERROR = "รองรับเฉพาะไฟล์ JPG, PNG, WebP, GIF เท่านั้น";
 export const MAX_BYTES = 5 * 1024 * 1024;
-export const TYPE_ERROR = "รองรับเฉพาะไฟล์ JPG, PNG, WebP และ GIF เท่านั้น";
-const BY_EXT = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
 
-export function detectType(file) {
-  let t = (file.type || "").toLowerCase();
-  if (t === "image/jpg" || t === "image/pjpeg") t = "image/jpeg";
-  if (!ALLOWED_TYPES.includes(t) && (!t || t === "application/octet-stream")) {
-    t = BY_EXT[(file.name || "").split(".").pop().toLowerCase()] || "";
-  }
-  return ALLOWED_TYPES.includes(t) ? t : "";
+// มือถือ/Chromebook บางรุ่นส่ง file.type ว่าง จึงเช็กนามสกุลไฟล์เป็นตัวสำรอง
+export function isAllowedImage(file) {
+  if (ALLOWED_TYPES.includes(file.type)) return true;
+  return (!file.type || file.type === "application/octet-stream") && /\.(jpe?g|png|webp|gif)$/i.test(file.name || "");
 }
 
 export async function shrinkImage(file, maxSide = 1600, quality = 0.85) {
+  // GIF: ห้ามผ่าน canvas เพราะจะเสียแอนิเมชัน (เหลือเฟรมแรก) — ส่งไฟล์เดิม ให้ Backend ย่อแบบคงแอนิเมชัน
+  if (file.type === "image/gif" || /\.gif$/i.test(file.name || "")) return file;
   try {
     const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
     const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
@@ -34,31 +29,4 @@ export async function shrinkImage(file, maxSide = 1600, quality = 0.85) {
   } catch {
     return file;
   }
-}
-
-/** ตรวจชนิด/ขนาด + ย่อ แล้วคืนไฟล์ที่พร้อมอัปโหลด (throw Error ข้อความภาษาไทยถ้าใช้ไม่ได้) */
-export async function prepareImage(file) {
-  const type = detectType(file);
-  if (!type) throw new Error(TYPE_ERROR);
-  let out = type === "image/gif" ? file : await shrinkImage(file);
-  if (out.size > MAX_BYTES) throw new Error("ไฟล์ใหญ่เกินไป (สูงสุด 5MB ต่อไฟล์)");
-  if (out === file && file.type !== type) out = new File([file], file.name || "image", { type });
-  return out;
-}
-
-/** รูปโปรไฟล์: ตัดเป็นสี่เหลี่ยมจัตุรัสตรงกลาง แล้วย่อ (GIF ใช้เฟรมแรก) — คืน { blob, dataUrl } (throw ข้อความไทยถ้าอ่านรูปไม่ได้) */
-export async function makeAvatar(file, size = 256) {
-  if (!detectType(file)) throw new Error(TYPE_ERROR);
-  if (file.size > MAX_BYTES * 2) throw new Error("ไฟล์ใหญ่เกินไป");
-  let bmp;
-  try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); } catch { throw new Error("อ่านรูปนี้ไม่ได้ ลองเลือกรูปอื่น"); }
-  const side = Math.min(bmp.width, bmp.height);
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  canvas.getContext("2d").drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
-  bmp.close?.();
-  const blob = await new Promise((r) => canvas.toBlob(r, "image/webp", 0.85));
-  if (!blob) throw new Error("ย่อรูปไม่สำเร็จ");
-  const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
-  return { blob, dataUrl };
 }

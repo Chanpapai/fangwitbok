@@ -42,7 +42,6 @@ app.use("/api/admin/trash", require("./routes/trash"));
 app.use("/api", require("./routes/popups")); // /api/popups , /api/admin/popups*
 app.use("/api", require("./routes/rules")); // /api/rules , /api/admin/rules* , /api/admin/upload/:folder
 app.use("/api", require("./routes/support")); // /api/support/* , /api/admin/support*
-app.use("/api", require("./routes/profile")); // /api/profile (ของตัวเองเท่านั้น)
 app.use("/api", require("./routes/notifications"));
 app.use("/api", require("./routes/settings")); // /api/settings , /api/admin/settings|stats|posts|images
 

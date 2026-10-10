@@ -19,7 +19,7 @@ export default function Rules() {
       <h1 className="font-bold text-xl mb-4 flex items-center gap-2"><Icon name="book" size={22} className="text-brand-500" /> กฎการฝากบอก</h1>
       {error && <p className="text-sm text-red-500">{error}</p>}
       {blocks === null && !error && <div className="card p-4 skeleton h-40" />}
-      {blocks?.length === 0 && <div className="card p-6 text-center text-sm text-slate-600 dark:text-slate-300">แอดมินยังไม่ได้เพิ่มกฎการใช้งาน</div>}
+      {blocks?.length === 0 && <div className="card p-6 text-center text-sm text-slate-400">แอดมินยังไม่ได้เพิ่มกฎการใช้งาน</div>}
       <div className="flex flex-col gap-3">
         {blocks?.map((b) =>
           b.type === "TEXT" ? (
@@ -27,7 +27,7 @@ export default function Rules() {
           ) : b.imageUrl ? (
             <button key={b.id} onClick={() => setLightbox(images.findIndex((i) => i.url === b.imageUrl))} className="card overflow-hidden block" aria-label="ดูรูปเต็มจอ">
               <img src={b.imageUrl} alt={b.text || "กฎการใช้งาน"} loading="lazy" className="w-full h-auto object-contain" />
-              {b.text && <p className="text-xs text-slate-600 dark:text-slate-300 p-3 text-left">{b.text}</p>}
+              {b.text && <p className="text-xs text-slate-500 p-3 text-left">{b.text}</p>}
             </button>
           ) : null
         )}

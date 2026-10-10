@@ -29,7 +29,7 @@ export default function ReportModal({ targetType, targetId, onClose }) {
         {done ? (
           <>
             <p className="font-bold text-lg flex items-center gap-2"><Icon name="check" className="text-emerald-500" /> ส่งรายงานแล้ว</p>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">ทีมแอดมินจะตรวจสอบเนื้อหานี้</p>
+            <p className="text-sm text-slate-500 mt-1">ทีมแอดมินจะตรวจสอบเนื้อหานี้</p>
             <button onClick={onClose} className="btn-primary w-full mt-4">ปิด</button>
           </>
         ) : (

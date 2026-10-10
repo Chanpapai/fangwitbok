@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Suspense, lazy } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import PopupBanner from "./components/PopupBanner";
@@ -11,10 +11,9 @@ import Feed from "./pages/Feed";
 import PostDetail from "./pages/PostDetail";
 import Compose from "./pages/Compose";
 import Rules from "./pages/Rules";
-import Settings from "./pages/Settings";
 import StaffLogin from "./pages/StaffLogin";
 
-// หลังบ้านโหลดแบบ lazy: ผู้เข้าชมทั่วไปไม่ต้องดาวน์โหลดโค้ดของ Admin (หน้าแรก/ฟีดเร็วขึ้น)
+// หลังบ้านโหลดแยกเมื่อเข้าใช้งานจริง — ผู้เข้าชมทั่วไปไม่ต้องดาวน์โหลดโค้ด Admin (เปิดเว็บเร็วขึ้น)
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminSupport = lazy(() => import("./pages/admin/AdminSupport"));
@@ -29,7 +28,6 @@ const AdminImages = lazy(() => import("./pages/admin/AdminImages"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
 
-const Loading = () => <div className="relative z-10 p-6 text-center text-slate-600 dark:text-slate-300 text-sm">กำลังโหลด...</div>;
 
 export default function App() {
   const { pathname } = useLocation();
@@ -41,14 +39,13 @@ export default function App() {
       {!backstage && <Navbar />}
       {!backstage && <PopupBanner />}
       {!backstage && <SupportChat />}
-      <Suspense fallback={<Loading />}>
+      <Suspense fallback={<div className="relative z-10 max-w-xl mx-auto p-6"><div className="card p-4 skeleton h-32" /></div>}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/feed" element={<Feed />} />
         <Route path="/new" element={<Compose />} />
         <Route path="/post/:id" element={<PostDetail />} />
         <Route path="/rules" element={<Rules />} />
-        <Route path="/settings" element={<Settings />} />
         <Route path="/staff" element={<StaffLogin />} />
 
         <Route element={<AdminRoute />}>
@@ -57,11 +54,11 @@ export default function App() {
             <Route path="posts" element={<AdminPosts />} />
             <Route path="images" element={<AdminImages />} />
             <Route path="settings" element={<AdminSettings />} />
-            <Route path="contacts" element={<AdminContacts />} />
             <Route path="support" element={<AdminSupport />} />
             <Route path="reports" element={<AdminReports />} />
             <Route path="trash" element={<AdminTrash />} />
             <Route path="popups" element={<AdminPopups />} />
+            <Route path="contacts" element={<AdminContacts />} />
             <Route path="rules" element={<AdminRules />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="audit-log" element={<AdminAuditLog />} />

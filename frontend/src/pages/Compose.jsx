@@ -3,23 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { getSavedProfile, saveProfile } from "../lib/guest";
 import { useSite } from "../context/SiteContext";
-import { ACCEPT, prepareImage } from "../lib/image";
-import { parseSocialUrl } from "../lib/social";
+import { ACCEPT_ATTR, MAX_BYTES, TYPE_ERROR, isAllowedImage, shrinkImage } from "../lib/image";
+import { parseSocialUrl } from "../lib/contact";
 import Icon from "../components/Icon";
-import BrandIcon from "../components/BrandIcon";
-import { useDialogs } from "../components/Dialogs";
-import EmojiPicker, { EmojiToggle, insertEmoji } from "../components/EmojiPicker";
-import { useProfile } from "../context/ProfileContext";
 
 const MAX_FILES = 5;
 
 export default function Compose() {
   const navigate = useNavigate();
   const { site } = useSite();
-  const { confirm } = useDialogs();
-  const { profile } = useProfile();
-  const [emoji, setEmoji] = useState(false);
-  const contentBox = useRef(null);
   const fileRef = useRef(null);
   const [identity, setIdentity] = useState(null); // null = ยังไม่เลือก | "named" | "anon"
   const [type, setType] = useState("ANNOUNCE");
@@ -27,18 +19,13 @@ export default function Compose() {
   const [location, setLocation] = useState("");
   const [name, setName] = useState("");
   const [className, setClassName] = useState("");
+  const [contactUrl, setContactUrl] = useState(""); // ช่องทางติดต่อกลับ (ไม่บังคับ): Instagram / Facebook
   const [website, setWebsite] = useState(""); // honeypot
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [contact, setContact] = useState(""); // ช่องทางติดต่อกลับ (ไม่บังคับ): ลิงก์ Instagram/Facebook
-  const contactTouched = useRef(false);
-  const contactCheck = parseSocialUrl(contact, ["INSTAGRAM", "FACEBOOK"]);
-  // เติมลิงก์จากโปรไฟล์ให้ครั้งเดียว (ผู้ใช้แก้/ลบได้ และจะแนบกับโพสต์ก็ต่อเมื่อกดส่งโพสต์เอง)
-  useEffect(() => {
-    if (!contactTouched.current && !contact) setContact(profile.instagramUrl || profile.facebookUrl || "");
-  }, [profile.instagramUrl, profile.facebookUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [confirmOpen, setConfirmOpen] = useState(false); // Popup ยืนยันก่อนส่งโพสต์
 
   useEffect(() => {
     const p = getSavedProfile();
@@ -55,8 +42,10 @@ export default function Compose() {
     const next = [...files];
     for (const f of picked) {
       if (next.length >= MAX_FILES) break;
-      try { next.push(await prepareImage(f)); } // ตรวจชนิด (JPG/PNG/WebP/GIF) + ขนาด + ย่อรูป
-      catch (err) { setError(err.message); }
+      if (!isAllowedImage(f)) return setError(TYPE_ERROR);
+      const small = await shrinkImage(f);
+      if (small.size > MAX_BYTES) return setError("ไฟล์ใหญ่เกินไป (สูงสุด 5MB ต่อไฟล์)");
+      next.push(small);
     }
     setFiles(next);
     setPreviews(next.map((f) => URL.createObjectURL(f)));
@@ -68,22 +57,19 @@ export default function Compose() {
     setPreviews(next.map((f) => URL.createObjectURL(f)));
   }
 
-  // ขั้นที่ 1: ตรวจข้อมูล แล้วเปิดหน้ายืนยันก่อน (ส่งแล้วผู้ใช้ลบเองไม่ได้)
-  async function submit(e) {
+  // ขั้นที่ 1: ตรวจข้อมูล แล้วเปิด Popup ให้ยืนยันก่อน (ส่งแล้วผู้ใช้ลบเองไม่ได้)
+  function submit(e) {
     e.preventDefault();
     if (!content.trim()) return setError("กรุณากรอกข้อความ");
     if (identity === "named" && !name.trim()) return setError("กรุณากรอกชื่อ");
-    if (contactCheck.error) return setError(contactCheck.error);
+    if (contactUrl.trim() && !parseSocialUrl(contactUrl)) return setError("ช่องทางติดต่อกลับใส่ได้เฉพาะลิงก์ Instagram หรือ Facebook ที่ถูกต้อง");
     setError("");
-    const ok = await confirm({
-      title: "ยืนยันการส่งโพสต์", message: site.postConfirmMessage,
-      confirmText: "ยืนยันส่งโพสต์", cancelText: "กลับไปแก้ไข", tone: "success", cancelTone: "danger",
-    });
-    if (ok) send();
+    setConfirmOpen(true);
   }
 
   // ขั้นที่ 2: ผู้ใช้กดยืนยัน จึงส่งโพสต์จริง
   async function send() {
+    setConfirmOpen(false);
     setBusy(true);
     setError("");
     try {
@@ -96,7 +82,7 @@ export default function Compose() {
         if (className.trim()) form.append("authorClass", className.trim());
       }
       if (type === "LOST_FOUND" && location.trim()) form.append("location", location.trim());
-      if (contactCheck.url) form.append("contactUrl", contactCheck.url); // Backend ตรวจซ้ำอีกชั้น
+      if (contactUrl.trim()) form.append("contactUrl", parseSocialUrl(contactUrl)?.url || "");
       form.append("website", website);
       files.forEach((f) => form.append("images", f));
 
@@ -115,20 +101,20 @@ export default function Compose() {
     return (
       <div className="relative z-10 max-w-xl mx-auto px-4 py-6 pb-28">
         <h1 className="font-bold text-xl">ฝากบอก</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 mb-5">เลือกว่าจะแสดงตัวตนของคุณหรือไม่</p>
+        <p className="text-sm text-slate-500 mt-1 mb-5">เลือกว่าจะแสดงตัวตนของคุณหรือไม่</p>
         <div className="grid gap-3">
           <button onClick={() => setIdentity("named")} className="card p-5 text-left flex items-start gap-4 hover:border-brand-400/60 transition">
             <span className="w-11 h-11 rounded-xl bg-brand-500/15 text-brand-500 dark:text-brand-300 flex items-center justify-center"><Icon name="user" size={22} /></span>
             <span>
               <span className="block font-semibold">ระบุตัวตน</span>
-              <span className="block text-sm text-slate-600 dark:text-slate-300 mt-0.5">แสดงชื่อและชั้น/ห้องของคุณบนโพสต์</span>
+              <span className="block text-sm text-slate-500 mt-0.5">แสดงชื่อและชั้น/ห้องของคุณบนโพสต์</span>
             </span>
           </button>
           <button onClick={() => setIdentity("anon")} className="card p-5 text-left flex items-start gap-4 hover:border-brand-400/60 transition">
             <span className="w-11 h-11 rounded-xl bg-slate-500/15 text-slate-500 dark:text-slate-300 flex items-center justify-center"><Icon name="eyeoff" size={22} /></span>
             <span>
               <span className="block font-semibold">ไม่ระบุตัวตน</span>
-              <span className="block text-sm text-slate-600 dark:text-slate-300 mt-0.5">ไม่แสดงชื่อ และระบบไม่เก็บชื่อหรือชั้นของคุณเลย</span>
+              <span className="block text-sm text-slate-500 mt-0.5">ไม่แสดงชื่อ และระบบไม่เก็บชื่อหรือชั้นของคุณเลย</span>
             </span>
           </button>
         </div>
@@ -149,7 +135,7 @@ export default function Compose() {
       <div className="grid grid-cols-2 gap-2 mb-4">
         {[["ANNOUNCE", "ฝากบอก", "megaphone"], ["LOST_FOUND", "ตามหาของหาย", "search"]].map(([v, label, icon]) => (
           <button key={v} type="button" onClick={() => setType(v)}
-            className={`py-2.5 rounded-xl font-semibold text-sm border flex items-center justify-center gap-2 transition ${type === v ? "bg-brand-600 text-white border-transparent shadow shadow-brand-600/25" : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300"}`}>
+            className={`py-2.5 rounded-xl font-semibold text-sm border flex items-center justify-center gap-2 transition ${type === v ? "bg-gradient-to-r from-brand-400 to-brand-500 text-white border-transparent shadow shadow-brand-500/25" : "border-slate-200 dark:border-white/10 text-slate-500"}`}>
             <Icon name={icon} size={17} /> {label}
           </button>
         ))}
@@ -163,33 +149,34 @@ export default function Compose() {
           </div>
         )}
 
-        <textarea ref={contentBox} className="input !text-[16.5px] !leading-7 font-medium" rows={5} maxLength={2000} value={content} onChange={(e) => setContent(e.target.value)} aria-label="ข้อความโพสต์"
+        <textarea className="input" rows={5} maxLength={2000} value={content} onChange={(e) => setContent(e.target.value)}
           placeholder={type === "LOST_FOUND" ? "อธิบายของที่หาย/เจอ ลักษณะ เวลา..." : "อยากฝากบอกอะไร..."} />
-        <div className="flex items-center justify-between -mt-2">
-          <EmojiToggle open={emoji} onClick={() => setEmoji((v) => !v)} />
-          <span className="text-[13px] text-slate-600 dark:text-slate-300">{content.length}/2000</span>
-        </div>
-        {emoji && <EmojiPicker onPick={(em) => insertEmoji(contentBox.current, content, em, setContent)} />}
+        <span className="text-xs text-slate-400 text-right -mt-2">{content.length}/2000</span>
 
         {type === "LOST_FOUND" && (
           <input className="input" placeholder="จุดที่พบ/ทำหาย (ไม่บังคับ)" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={200} />
         )}
 
         <div>
-          <label className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-1.5" htmlFor="contact">ช่องทางติดต่อกลับ (ไม่บังคับ)</label>
           <div className="relative">
-            <input id="contact" className={`input ${contactCheck.platform ? "!pl-12" : ""}`} placeholder="ลิงก์ Instagram หรือ Facebook" value={contact} onChange={(e) => { contactTouched.current = true; setContact(e.target.value); }} maxLength={300} inputMode="url" autoComplete="off" autoCapitalize="none" spellCheck={false} />
-            {contactCheck.platform && <span className="absolute left-3 top-1/2 -translate-y-1/2"><BrandIcon platform={contactCheck.platform} size={24} /></span>}
+            <input
+              className="input pr-10" type="text" inputMode="url" autoComplete="off" maxLength={200}
+              placeholder="ช่องทางติดต่อกลับ: ลิงก์ Instagram หรือ Facebook (ไม่บังคับ)"
+              value={contactUrl} onChange={(e) => setContactUrl(e.target.value)}
+            />
+            {parseSocialUrl(contactUrl) && (
+              <Icon name={parseSocialUrl(contactUrl).type === "INSTAGRAM" ? "instagram" : "facebook"} size={18}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 ${parseSocialUrl(contactUrl).type === "INSTAGRAM" ? "text-pink-500" : "text-blue-500"}`} />
+            )}
           </div>
-          {contact.trim() && contactCheck.error && <p className="text-xs text-red-600 dark:text-red-300 mt-1">{contactCheck.error}</p>}
-          {contactCheck.platform && <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">จะแสดงไอคอน {contactCheck.platform === "INSTAGRAM" ? "Instagram" : "Facebook"} ข้างโพสต์ ให้คนกดติดต่อกลับได้</p>}
+          <p className="text-[11px] text-slate-500 dark:text-slate-300 mt-1">ลิงก์นี้จะแสดงเป็นไอคอนข้างโพสต์ ไม่แสดงข้อมูลอื่นของคุณ</p>
         </div>
 
         {/* honeypot: คนจริงมองไม่เห็น บอทมักกรอก */}
         <input tabIndex={-1} autoComplete="off" aria-hidden="true" value={website} onChange={(e) => setWebsite(e.target.value)} className="absolute -left-[9999px] w-px h-px opacity-0" name="website" />
 
         <div>
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-300 mb-2">รูปภาพ JPG, PNG, WebP, GIF (ไม่บังคับ สูงสุด {MAX_FILES} รูป)</p>
+          <p className="text-xs font-semibold text-slate-500 mb-2">รูปภาพ JPG, PNG, WebP, GIF (ไม่บังคับ สูงสุด {MAX_FILES} รูป)</p>
           {previews.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mb-2">
               {previews.map((src, i) => (
@@ -203,14 +190,25 @@ export default function Compose() {
           {files.length < MAX_FILES && (
             <button type="button" onClick={() => fileRef.current?.click()} className="btn-ghost text-sm"><Icon name="image" size={18} /> เลือกรูป</button>
           )}
-          <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={pickFiles} />
+          <input ref={fileRef} type="file" accept={ACCEPT_ATTR} multiple hidden onChange={pickFiles} />
         </div>
 
-        {error && <p className="text-sm text-red-600 dark:text-red-300">{error}</p>}
+        {error && <p className="text-sm text-red-500">{error}</p>}
         <button disabled={busy} className="btn-primary w-full py-3 text-base">{busy ? "กำลังโพสต์..." : "โพสต์"}</button>
-        <p className="text-[11px] text-slate-500 dark:text-slate-300 text-center">โพสต์ที่ส่งแล้วลบเองไม่ได้ หากต้องการลบให้แจ้งแอดมิน (ปุ่ม “ติดต่อแอดมิน” มุมซ้ายล่าง)</p>
+        <p className="text-[11px] text-slate-500 dark:text-slate-300 text-center">โพสต์ที่ส่งแล้วลบเองไม่ได้ หากต้องการลบให้แจ้งแอดมิน (ปุ่ม “ติดต่อแอดมิน” มุมขวาล่าง)</p>
       </form>
 
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-5" onClick={() => setConfirmOpen(false)} role="dialog" aria-modal="true" aria-label="ยืนยันการส่งโพสต์">
+          <div className="w-full max-w-sm rounded-2xl bg-white text-slate-900 shadow-2xl p-5 animate-popin" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[15px] leading-relaxed whitespace-pre-line break-words">{site.postConfirmMessage}</p>
+            <div className="grid grid-cols-2 gap-2.5 mt-5">
+              <button type="button" onClick={() => setConfirmOpen(false)} className="btn !py-3 bg-red-500 hover:bg-red-600 text-white">กลับไปแก้ไข</button>
+              <button type="button" onClick={send} className="btn !py-3 bg-emerald-500 hover:bg-emerald-600 text-white">ยืนยันส่งโพสต์</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

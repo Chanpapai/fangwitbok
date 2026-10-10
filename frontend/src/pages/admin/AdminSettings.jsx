@@ -36,7 +36,7 @@ export default function AdminSettings() {
   if (!isSuper) {
     return (
       <div className="card-post p-6 text-center">
-        <Icon name="lock" size={30} className="mx-auto mb-2 text-slate-600 dark:text-slate-300" />
+        <Icon name="lock" size={30} className="mx-auto mb-2 text-slate-500" />
         <p className="font-bold">เฉพาะ Super Admin</p>
         <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">การตั้งค่าหน้าเว็บไซต์แก้ไขได้เฉพาะ Super Admin เท่านั้น</p>
       </div>
@@ -77,7 +77,7 @@ export default function AdminSettings() {
         </div>
         <div className="rounded-xl bg-slate-100 dark:bg-white/[0.07] p-3">
           <p className="text-[11px] text-slate-500 dark:text-slate-300 mb-1">ตัวอย่าง</p>
-          <p className="text-center font-bold text-lg whitespace-pre-line break-words bg-gradient-to-r from-brand-600 to-brand-500 bg-clip-text text-transparent">{headline || " "}</p>
+          <p className="text-center font-bold text-lg whitespace-pre-line break-words bg-gradient-to-r from-brand-400 to-brand-500 bg-clip-text text-transparent dark:from-sky-300 dark:to-violet-300">{headline || " "}</p>
         </div>
       </section>
 

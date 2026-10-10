@@ -55,8 +55,8 @@ export default function Feed() {
     finally { setLoadingMore(false); }
   }
 
-  const handleChanged = useCallback((id, updated) =>
-    setPosts((prev) => (updated === null ? prev.filter((p) => p.id !== id) : prev.map((p) => (p.id === id ? updated : p)))), []);
+  const handleChanged = (id, updated) =>
+    setPosts((prev) => (updated === null ? prev.filter((p) => p.id !== id) : prev.map((p) => (p.id === id ? updated : p))));
 
   return (
     <div className="relative z-10 max-w-xl mx-auto px-4 py-4 pb-28">
@@ -69,12 +69,12 @@ export default function Feed() {
       {error && <p className="text-sm text-red-500 text-center py-4">{error}</p>}
       {posts === null && !error && (
         <div className="flex flex-col gap-3">
-          {slow && <p className="text-xs text-center text-slate-600 dark:text-slate-300">กำลังปลุกเซิร์ฟเวอร์ ครั้งแรกอาจใช้เวลาประมาณ 30–60 วินาที...</p>}
+          {slow && <p className="text-xs text-center text-slate-400">กำลังปลุกเซิร์ฟเวอร์ ครั้งแรกอาจใช้เวลาประมาณ 30–60 วินาที...</p>}
           <Skeleton /><Skeleton />
         </div>
       )}
       {posts?.length === 0 && (
-        <div className="text-center py-16 text-slate-600 dark:text-slate-300">
+        <div className="text-center py-16 text-slate-400">
           <Icon name="megaphone" size={36} className="mx-auto mb-3 opacity-60" />
           <p className="text-sm">ยังไม่มีโพสต์ในหมวดนี้</p>
           <Link to="/new" className="btn-primary mt-4">เป็นคนแรกที่ฝากบอก</Link>
@@ -82,7 +82,7 @@ export default function Feed() {
       )}
 
       <div className="flex flex-col gap-3">
-        {posts?.map((post) => <PostCard key={post.id} post={post} onChanged={handleChanged} />)}
+        {posts?.map((post) => <PostCard key={post.id} post={post} onChanged={(u) => handleChanged(post.id, u)} />)}
       </div>
 
       {hasMore && (
