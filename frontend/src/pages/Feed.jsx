@@ -69,12 +69,12 @@ export default function Feed() {
       {error && <p className="text-sm text-red-500 text-center py-4">{error}</p>}
       {posts === null && !error && (
         <div className="flex flex-col gap-3">
-          {slow && <p className="text-xs text-center text-slate-400">กำลังปลุกเซิร์ฟเวอร์ ครั้งแรกอาจใช้เวลาประมาณ 30–60 วินาที...</p>}
+          {slow && <p className="text-xs text-center text-slate-600 dark:text-slate-300">กำลังปลุกเซิร์ฟเวอร์ ครั้งแรกอาจใช้เวลาประมาณ 30–60 วินาที...</p>}
           <Skeleton /><Skeleton />
         </div>
       )}
       {posts?.length === 0 && (
-        <div className="text-center py-16 text-slate-400">
+        <div className="text-center py-16 text-slate-600 dark:text-slate-300">
           <Icon name="megaphone" size={36} className="mx-auto mb-3 opacity-60" />
           <p className="text-sm">ยังไม่มีโพสต์ในหมวดนี้</p>
           <Link to="/new" className="btn-primary mt-4">เป็นคนแรกที่ฝากบอก</Link>

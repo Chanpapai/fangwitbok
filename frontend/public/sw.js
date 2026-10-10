@@ -3,7 +3,7 @@
  * - /assets/* (ไฟล์ Vite ที่มี hash ในชื่อ) : cache-first (ไม่เปลี่ยนเนื้อหาตามชื่อ)
  * - หน้า (navigation) : network-first แล้วสำรองด้วย index.html ที่แคชไว้ ถ้าออฟไลน์
  * - รูปจาก Supabase Storage : ไม่แคชใน SW (เบราว์เซอร์แคชเองอยู่แล้ว 1 ปี) */
-const VERSION = "fwb-v1";
+const VERSION = "fwb-v2";
 const SHELL = ["/", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

@@ -49,7 +49,7 @@ function publicUser(user) {
   return {
     id: user.id,
     displayName: user.displayName,
-    avatarUrl: user.avatarUrl,
+    avatarUrl: require("../config/storage").publicUrl(user.avatarUrl),
     role: user.role,
   };
 }

@@ -45,3 +45,20 @@ export async function prepareImage(file) {
   if (out === file && file.type !== type) out = new File([file], file.name || "image", { type });
   return out;
 }
+
+/** รูปโปรไฟล์: ตัดเป็นสี่เหลี่ยมจัตุรัสตรงกลาง แล้วย่อ (GIF ใช้เฟรมแรก) — คืน { blob, dataUrl } (throw ข้อความไทยถ้าอ่านรูปไม่ได้) */
+export async function makeAvatar(file, size = 256) {
+  if (!detectType(file)) throw new Error(TYPE_ERROR);
+  if (file.size > MAX_BYTES * 2) throw new Error("ไฟล์ใหญ่เกินไป");
+  let bmp;
+  try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); } catch { throw new Error("อ่านรูปนี้ไม่ได้ ลองเลือกรูปอื่น"); }
+  const side = Math.min(bmp.width, bmp.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  canvas.getContext("2d").drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+  bmp.close?.();
+  const blob = await new Promise((r) => canvas.toBlob(r, "image/webp", 0.85));
+  if (!blob) throw new Error("ย่อรูปไม่สำเร็จ");
+  const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+  return { blob, dataUrl };
+}

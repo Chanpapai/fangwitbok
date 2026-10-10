@@ -6,3 +6,8 @@ ALTER TABLE "Popup" ADD COLUMN IF NOT EXISTS "images" TEXT[] NOT NULL DEFAULT AR
 ALTER TABLE "Popup" ALTER COLUMN "title" SET DEFAULT '';
 ALTER TABLE "Popup" ALTER COLUMN "body"  SET DEFAULT '';
 CREATE INDEX IF NOT EXISTS "Post_deletedAt_createdAt_idx" ON "Post" ("deletedAt", "createdAt");
+
+-- รอบ 2: โปรไฟล์ + สถานะอ่านข้อความแชท (ข้อความเดิมถือว่าอ่านแล้ว)
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "instagramUrl" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "facebookUrl"  TEXT;
+ALTER TABLE "SupportMessage" ADD COLUMN IF NOT EXISTS "isRead" BOOLEAN NOT NULL DEFAULT true;

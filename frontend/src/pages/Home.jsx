@@ -53,7 +53,7 @@ export default function Home() {
   }
 
   return (
-    <main className={`relative z-10 min-h-[100dvh] flex flex-col items-center justify-center px-5 pt-16 ${contacts.length ? "pb-52" : "pb-40"}`}>
+    <main className={`relative z-10 min-h-[100dvh] flex flex-col items-center justify-center px-5 pt-[calc(4rem+env(safe-area-inset-top))] ${contacts.length ? "pb-52" : "pb-40"}`}>
       <button onClick={onLogoTap} className="outline-none" aria-label="FangwitBok V2" tabIndex={-1}>
         <img
           src={logo} alt="ฝากวิทฝากบอก FangwitBok.V2"
@@ -64,7 +64,7 @@ export default function Home() {
 
       {/* ข้อความหลักหน้าแรก: Super Admin แก้ได้จากหลังบ้าน (ตั้งค่าหน้าเว็บไซต์) */}
       <h1 className="mt-7 text-center font-bold text-[1.65rem] sm:text-3xl leading-snug max-w-md whitespace-pre-line break-words text-slate-800 dark:text-white">
-        <span className="bg-gradient-to-r from-brand-400 to-brand-500 bg-clip-text text-transparent dark:from-sky-300 dark:to-violet-300">
+        <span className="bg-gradient-to-r from-brand-600 to-brand-500 bg-clip-text text-transparent dark:from-brand-300 dark:to-brand-400">
           {site.homeHeadline}
         </span>
       </h1>
@@ -75,7 +75,7 @@ export default function Home() {
           <Link to="/feed" className="btn-ghost !py-3.5 !text-base border-2 border-slate-400 dark:border-white/40 !bg-white dark:!bg-white/10 shadow-md">
             <Icon name="feed" size={20} /> ดูโพสต์
           </Link>
-          <Link to="/new" className="btn-primary !py-3.5 !text-base border-2 border-brand-700 dark:border-white shadow-xl shadow-brand-500/40">
+          <Link to="/new" className="btn-primary !py-3.5 !text-base border-2 border-brand-700 dark:border-white shadow-xl shadow-brand-600/40">
             <Icon name="megaphone" size={20} /> ฝากบอก
           </Link>
         </div>

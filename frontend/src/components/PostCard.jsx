@@ -14,12 +14,12 @@ import { useDialogs } from "./Dialogs";
 export function AuthorLine({ author, createdAt }) {
   return (
     <div className="min-w-0 flex-1">
-      <p className="font-semibold text-sm truncate flex items-center gap-1.5">
-        {author.anonymous && <Icon name="eyeoff" size={14} className="text-slate-500" />}
+      <p className="font-semibold text-[15px] truncate flex items-center gap-1.5 text-slate-950">
+        {author.anonymous && <Icon name="eyeoff" size={14} className="text-slate-600 dark:text-slate-300" />}
         <span className={author.anonymous ? "text-slate-600" : ""}>{author.name}</span>
-        {author.className && <span className="font-normal text-slate-500">· {author.className}</span>}
+        {author.className && <span className="font-normal text-slate-600 dark:text-slate-300">· {author.className}</span>}
       </p>
-      <p className="text-xs text-slate-500">{timeAgo(createdAt)}</p>
+      <p className="text-[12.5px] text-slate-600">{timeAgo(createdAt)}</p>
     </div>
   );
 }
@@ -145,11 +145,11 @@ function PostCard({ post, onChanged, detailed = false }) {
       </div>
 
       {lost && post.location && (
-        <p className="mt-2.5 text-xs text-slate-600 flex items-center gap-1"><Icon name="pin" size={13} /> {post.location}</p>
+        <p className="mt-2.5 text-[13px] text-slate-700 flex items-center gap-1"><Icon name="pin" size={13} /> {post.location}</p>
       )}
 
       <Link to={`/post/${post.id}`} className="block mt-2.5">
-        <p className={`text-[15px] leading-relaxed whitespace-pre-line break-words text-slate-900 ${detailed ? "" : "line-clamp-6"}`}>{post.content}</p>
+        <p className={`text-[16.5px] leading-[1.7] font-medium whitespace-pre-line break-words text-slate-950 ${detailed ? "" : "line-clamp-6"}`}>{post.content}</p>
       </Link>
 
       {/* รูปแสดงทีละ 1 รูป: Carousel + ปุ่มก่อนหน้า/ถัดไป + Indicator + เลื่อนอัตโนมัติ วนกลับรูปแรก */}

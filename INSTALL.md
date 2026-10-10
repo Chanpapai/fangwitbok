@@ -40,6 +40,12 @@ Root Directory = `frontend` · Framework: Vite
 - **ติดตั้งเป็นแอป (PWA):** manifest + ไอคอน + Service Worker (ไม่แคช /api) — ปุ่ม "ติดตั้งแอป" ที่แถบบน
 - **Schema ที่เพิ่ม (db push ทำให้เองตอน build, ไม่ลบข้อมูล):** Post.contactType/contactUrl, Popup.images (title/body มีค่าเริ่มต้นว่าง), index Post(deletedAt, createdAt) — ดู `prisma/migration.sql` ถ้าต้องการรันเอง
 
+## รอบที่ 2: โปรไฟล์ · ธีม · แชท
+- **ตั้งค่า (`/settings`):** กดรูปโปรไฟล์มุมขวาบน → โปรไฟล์ (รูป/ลิงก์ Instagram, Facebook) + เลือกสีธีมพร้อมตัวอย่าง (จำไว้ในเครื่อง) · ทีมงานที่ล็อกอินเก็บโปรไฟล์ที่ฐานข้อมูล ซิงค์ทุกอุปกรณ์ ผู้เข้าชมทั่วไปเก็บในเครื่องนี้
+- **แชท:** ปุ่มอิโมจิ, ปุ่มกระดิ่งเลื่อนไปข้อความค้างอ่านล่าสุด (สถานะอ่านเก็บที่ฐานข้อมูลต่อข้อความ), หน้าต่างแชทปรับตามคีย์บอร์ดเสมือน
+- **Schema ที่เพิ่ม:** User.instagramUrl/facebookUrl, SupportMessage.isRead (ข้อความเดิมถือว่าอ่านแล้ว) — `db push` ทำให้เองตอน build หรือรัน `prisma/migration.sql`
+- **Render ต้อง Deploy ใหม่** เพราะมี API ใหม่ (/api/profile, /api/support/read)
+
 ## ข้อจำกัด Free Tier
 - Render หลับหลังไม่มีคนใช้ ~15 นาที ครั้งแรกช้า 30–60 วินาที **ข้อมูลและรูปไม่หาย** (อยู่ที่ Supabase)
 - Supabase: DB 500MB, Storage 1GB, Egress 5GB/เดือน — ระบบย่อรูปเป็น WebP ≤1600px, cache รูป 1 ปี, ไม่ดึง count แยก, Popup/กฎ cache 30 วินาที, แชทตรวจทุก 8–60 วินาทีเฉพาะตอนจำเป็น

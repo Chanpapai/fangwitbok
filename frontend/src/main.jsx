@@ -6,6 +6,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { SiteProvider } from "./context/SiteContext";
 import { DialogProvider } from "./components/Dialogs";
+import { ProfileProvider } from "./context/ProfileContext";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -15,7 +16,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <DialogProvider>
           <SiteProvider>
             <AuthProvider>
-              <App />
+              <ProfileProvider>
+                <App />
+              </ProfileProvider>
             </AuthProvider>
           </SiteProvider>
         </DialogProvider>

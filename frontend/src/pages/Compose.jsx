@@ -8,6 +8,8 @@ import { parseSocialUrl } from "../lib/social";
 import Icon from "../components/Icon";
 import BrandIcon from "../components/BrandIcon";
 import { useDialogs } from "../components/Dialogs";
+import EmojiPicker, { EmojiToggle, insertEmoji } from "../components/EmojiPicker";
+import { useProfile } from "../context/ProfileContext";
 
 const MAX_FILES = 5;
 
@@ -15,6 +17,9 @@ export default function Compose() {
   const navigate = useNavigate();
   const { site } = useSite();
   const { confirm } = useDialogs();
+  const { profile } = useProfile();
+  const [emoji, setEmoji] = useState(false);
+  const contentBox = useRef(null);
   const fileRef = useRef(null);
   const [identity, setIdentity] = useState(null); // null = ยังไม่เลือก | "named" | "anon"
   const [type, setType] = useState("ANNOUNCE");
@@ -28,7 +33,12 @@ export default function Compose() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [contact, setContact] = useState(""); // ช่องทางติดต่อกลับ (ไม่บังคับ): ลิงก์ Instagram/Facebook
+  const contactTouched = useRef(false);
   const contactCheck = parseSocialUrl(contact, ["INSTAGRAM", "FACEBOOK"]);
+  // เติมลิงก์จากโปรไฟล์ให้ครั้งเดียว (ผู้ใช้แก้/ลบได้ และจะแนบกับโพสต์ก็ต่อเมื่อกดส่งโพสต์เอง)
+  useEffect(() => {
+    if (!contactTouched.current && !contact) setContact(profile.instagramUrl || profile.facebookUrl || "");
+  }, [profile.instagramUrl, profile.facebookUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const p = getSavedProfile();
@@ -105,20 +115,20 @@ export default function Compose() {
     return (
       <div className="relative z-10 max-w-xl mx-auto px-4 py-6 pb-28">
         <h1 className="font-bold text-xl">ฝากบอก</h1>
-        <p className="text-sm text-slate-500 mt-1 mb-5">เลือกว่าจะแสดงตัวตนของคุณหรือไม่</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 mb-5">เลือกว่าจะแสดงตัวตนของคุณหรือไม่</p>
         <div className="grid gap-3">
           <button onClick={() => setIdentity("named")} className="card p-5 text-left flex items-start gap-4 hover:border-brand-400/60 transition">
             <span className="w-11 h-11 rounded-xl bg-brand-500/15 text-brand-500 dark:text-brand-300 flex items-center justify-center"><Icon name="user" size={22} /></span>
             <span>
               <span className="block font-semibold">ระบุตัวตน</span>
-              <span className="block text-sm text-slate-500 mt-0.5">แสดงชื่อและชั้น/ห้องของคุณบนโพสต์</span>
+              <span className="block text-sm text-slate-600 dark:text-slate-300 mt-0.5">แสดงชื่อและชั้น/ห้องของคุณบนโพสต์</span>
             </span>
           </button>
           <button onClick={() => setIdentity("anon")} className="card p-5 text-left flex items-start gap-4 hover:border-brand-400/60 transition">
             <span className="w-11 h-11 rounded-xl bg-slate-500/15 text-slate-500 dark:text-slate-300 flex items-center justify-center"><Icon name="eyeoff" size={22} /></span>
             <span>
               <span className="block font-semibold">ไม่ระบุตัวตน</span>
-              <span className="block text-sm text-slate-500 mt-0.5">ไม่แสดงชื่อ และระบบไม่เก็บชื่อหรือชั้นของคุณเลย</span>
+              <span className="block text-sm text-slate-600 dark:text-slate-300 mt-0.5">ไม่แสดงชื่อ และระบบไม่เก็บชื่อหรือชั้นของคุณเลย</span>
             </span>
           </button>
         </div>
@@ -139,7 +149,7 @@ export default function Compose() {
       <div className="grid grid-cols-2 gap-2 mb-4">
         {[["ANNOUNCE", "ฝากบอก", "megaphone"], ["LOST_FOUND", "ตามหาของหาย", "search"]].map(([v, label, icon]) => (
           <button key={v} type="button" onClick={() => setType(v)}
-            className={`py-2.5 rounded-xl font-semibold text-sm border flex items-center justify-center gap-2 transition ${type === v ? "bg-gradient-to-r from-brand-400 to-brand-500 text-white border-transparent shadow shadow-brand-500/25" : "border-slate-200 dark:border-white/10 text-slate-500"}`}>
+            className={`py-2.5 rounded-xl font-semibold text-sm border flex items-center justify-center gap-2 transition ${type === v ? "bg-brand-600 text-white border-transparent shadow shadow-brand-600/25" : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300"}`}>
             <Icon name={icon} size={17} /> {label}
           </button>
         ))}
@@ -153,9 +163,13 @@ export default function Compose() {
           </div>
         )}
 
-        <textarea className="input" rows={5} maxLength={2000} value={content} onChange={(e) => setContent(e.target.value)}
+        <textarea ref={contentBox} className="input !text-[16.5px] !leading-7 font-medium" rows={5} maxLength={2000} value={content} onChange={(e) => setContent(e.target.value)} aria-label="ข้อความโพสต์"
           placeholder={type === "LOST_FOUND" ? "อธิบายของที่หาย/เจอ ลักษณะ เวลา..." : "อยากฝากบอกอะไร..."} />
-        <span className="text-xs text-slate-400 text-right -mt-2">{content.length}/2000</span>
+        <div className="flex items-center justify-between -mt-2">
+          <EmojiToggle open={emoji} onClick={() => setEmoji((v) => !v)} />
+          <span className="text-[13px] text-slate-600 dark:text-slate-300">{content.length}/2000</span>
+        </div>
+        {emoji && <EmojiPicker onPick={(em) => insertEmoji(contentBox.current, content, em, setContent)} />}
 
         {type === "LOST_FOUND" && (
           <input className="input" placeholder="จุดที่พบ/ทำหาย (ไม่บังคับ)" value={location} onChange={(e) => setLocation(e.target.value)} maxLength={200} />
@@ -164,7 +178,7 @@ export default function Compose() {
         <div>
           <label className="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-1.5" htmlFor="contact">ช่องทางติดต่อกลับ (ไม่บังคับ)</label>
           <div className="relative">
-            <input id="contact" className={`input ${contactCheck.platform ? "!pl-12" : ""}`} placeholder="ลิงก์ Instagram หรือ Facebook" value={contact} onChange={(e) => setContact(e.target.value)} maxLength={300} inputMode="url" autoComplete="off" autoCapitalize="none" spellCheck={false} />
+            <input id="contact" className={`input ${contactCheck.platform ? "!pl-12" : ""}`} placeholder="ลิงก์ Instagram หรือ Facebook" value={contact} onChange={(e) => { contactTouched.current = true; setContact(e.target.value); }} maxLength={300} inputMode="url" autoComplete="off" autoCapitalize="none" spellCheck={false} />
             {contactCheck.platform && <span className="absolute left-3 top-1/2 -translate-y-1/2"><BrandIcon platform={contactCheck.platform} size={24} /></span>}
           </div>
           {contact.trim() && contactCheck.error && <p className="text-xs text-red-600 dark:text-red-300 mt-1">{contactCheck.error}</p>}

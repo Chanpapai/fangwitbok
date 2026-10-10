@@ -7,12 +7,10 @@ export default {
     extend: {
       keyframes: { fade: { from: { opacity: 0 }, to: { opacity: 1 } } },
       animation: { fade: "fade .35s ease both" },
-      fontFamily: { sans: ["Prompt", "Noto Sans Thai", "system-ui", "sans-serif"] },
+      // ฟอนต์สไตล์ iOS: ตัวอักษรละตินใช้ฟอนต์ระบบ (SF Pro บน iPhone/Mac, Roboto บน Android) ส่วนภาษาไทยใช้ Noto Sans Thai ที่อ่านง่ายเท่ากันทุกเครื่อง
+      fontFamily: { sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Noto Sans Thai", "Sarabun", "system-ui", "sans-serif"] },
       colors: {
-        brand: {
-          50: "#f0f5ff", 100: "#e0ebff", 200: "#c7d6fe", 300: "#a5b8fc",
-          400: "#60a5fa", 500: "#6d5df6", 600: "#5847e0", 700: "#4638b8",
-        },
+        brand: Object.fromEntries([50, 100, 200, 300, 400, 500, 600, 700].map((n) => [n, `rgb(var(--brand-${n}) / <alpha-value>)`])),
         ink: { 900: "#080b18", 800: "#0d1226", 700: "#141a33", 600: "#1c2444" },
       },
     },

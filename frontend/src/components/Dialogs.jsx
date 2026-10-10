@@ -15,7 +15,7 @@ const TONE = {
   neutral: "bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100",
 };
 const TOAST = { error: "bg-red-700", success: "bg-emerald-700", info: "bg-slate-800 dark:bg-slate-700" };
-const BTN = "flex-1 rounded-xl px-4 py-3 text-[15px] font-semibold transition active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#1b2350]";
+const BTN = "flex-1 rounded-[14px] px-4 py-3 text-[16px] font-semibold transition active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#1b2350]";
 
 function ConfirmModal({ opts, onClose }) {
   const { title, message, confirmText = "ยืนยัน", cancelText = "ยกเลิก", tone = "primary", cancelTone = "neutral", icon, input } = opts;
@@ -46,10 +46,10 @@ function ConfirmModal({ opts, onClose }) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-5" onMouseDown={(e) => e.target === e.currentTarget && cancel()}>
+    <div className="fixed inset-0 z-[70] bg-black/55 backdrop-blur-md flex items-center justify-center p-5 animate-scrim" onMouseDown={(e) => e.target === e.currentTarget && cancel()}>
       <div
         ref={box} role="alertdialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-msg"
-        className="w-full max-w-sm rounded-2xl bg-white text-slate-900 dark:bg-[#1b2350] dark:text-slate-50 border border-slate-200 dark:border-white/15 shadow-2xl p-5 animate-popin"
+        className="w-full max-w-sm rounded-[24px] bg-white text-slate-900 dark:bg-[#1b2350] dark:text-slate-50 border border-slate-200 dark:border-white/15 shadow-2xl p-5 animate-ios-pop"
       >
         {icon && (
           <span className={`w-11 h-11 rounded-full flex items-center justify-center mb-3 ${tone === "danger" ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200" : "bg-brand-100 text-brand-700 dark:bg-brand-400/20 dark:text-brand-200"}`}>

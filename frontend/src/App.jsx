@@ -11,6 +11,7 @@ import Feed from "./pages/Feed";
 import PostDetail from "./pages/PostDetail";
 import Compose from "./pages/Compose";
 import Rules from "./pages/Rules";
+import Settings from "./pages/Settings";
 import StaffLogin from "./pages/StaffLogin";
 
 // หลังบ้านโหลดแบบ lazy: ผู้เข้าชมทั่วไปไม่ต้องดาวน์โหลดโค้ดของ Admin (หน้าแรก/ฟีดเร็วขึ้น)
@@ -28,7 +29,7 @@ const AdminImages = lazy(() => import("./pages/admin/AdminImages"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminContacts = lazy(() => import("./pages/admin/AdminContacts"));
 
-const Loading = () => <div className="relative z-10 p-6 text-center text-slate-500 text-sm">กำลังโหลด...</div>;
+const Loading = () => <div className="relative z-10 p-6 text-center text-slate-600 dark:text-slate-300 text-sm">กำลังโหลด...</div>;
 
 export default function App() {
   const { pathname } = useLocation();
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/new" element={<Compose />} />
         <Route path="/post/:id" element={<PostDetail />} />
         <Route path="/rules" element={<Rules />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="/staff" element={<StaffLogin />} />
 
         <Route element={<AdminRoute />}>
